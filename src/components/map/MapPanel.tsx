@@ -119,6 +119,61 @@ export default function MapPanel({ aoi, mode, opacity, filter, vlm, selectedId, 
     });
   }, [opacity, vlm]);
 
+  const focusFeature = useCallback((id?: string) => {
+    const map = mapRef.current;
+    if (!map || !id) return;
+    const feature = featuresRef.current.find((candidate) => candidate.properties.id === id);
+    let olFeature = olFeatureByIdRef.current.get(id);
+    if (!feature) return;
+    if (!olFeature) {
+      olFeature = new GeoJSON().readFeature(feature, {
+        dataProjection: "EPSG:4326",
+        featureProjection: "EPSG:3857",
+      }) as OlDamageFeature;
+      olFeature.original = feature;
+    }
+    const extent = olFeature.getGeometry()?.getExtent();
+    const centroidLat = Number(feature.properties.centroid_lat);
+    const centroidLon = Number(feature.properties.centroid_lon);
+    const center = Number.isFinite(centroidLat) && Number.isFinite(centroidLon)
+      ? fromLonLat([centroidLon, centroidLat])
+      : extent
+        ? getCenter(extent)
+        : undefined;
+    if (!center) return;
+    map.getView().setCenter(center);
+    map.getView().setZoom(18);
+    highlightRef.current?.getSource()?.clear();
+    if (olFeature.getGeometry()) {
+      const highlightFeature = olFeature.clone() as OlDamageFeature;
+      highlightFeature.original = feature;
+      highlightRef.current?.getSource()?.addFeature(highlightFeature);
+    }
+    highlightRef.current?.setStyle(new Style({
+      stroke: new Stroke({ color: "#ffffff", width: 5 }),
+      fill: new Fill({ color: "rgba(255,255,255,0.08)" }),
+    }));
+    markerRef.current?.getSource()?.clear();
+    const markerFeature = new Feature({ geometry: new GeoJSON().readGeometry({ type: "Point", coordinates: toLonLat(center) }, { dataProjection: "EPSG:4326", featureProjection: "EPSG:3857" }) });
+    markerRef.current?.getSource()?.addFeature(markerFeature);
+    markerRef.current?.setStyle(new Style({
+      image: new CircleStyle({
+        radius: 10,
+        stroke: new Stroke({ color: "#ffffff", width: 3 }),
+        fill: new Fill({ color: "rgba(196,33,40,0.28)" }),
+      }),
+    }));
+    if (popupRef.current) {
+      popupRef.current.innerHTML = popupHtml(feature.properties);
+      popupOverlayRef.current?.setPosition(center);
+    }
+    const [lng, lat] = toLonLat(center);
+    nodeRef.current?.setAttribute("data-focused-id", id);
+    nodeRef.current?.setAttribute("data-map-center", `${lat.toFixed(7)},${lng.toFixed(7)}`);
+    nodeRef.current?.setAttribute("data-map-zoom", String(map.getView().getZoom()));
+    setDebug(featuresRef.current.filter((candidate) => passesFilter(candidate, filter, vlm)));
+  }, [filter, setDebug, vlm]);
+
   const renderVectors = useCallback(() => {
     const vector = vectorRef.current;
     if (!vector) return;
@@ -139,7 +194,10 @@ export default function MapPanel({ aoi, mode, opacity, filter, vlm, selectedId, 
     vector.setStyle((feature) => styleFor(feature as OlDamageFeature));
     nodeRef.current?.setAttribute("data-visible-features", String(visible.length));
     setDebug(visible);
-  }, [filter, setDebug, styleFor, vlm]);
+    if (selectedIdRef.current) {
+      window.setTimeout(() => focusFeature(selectedIdRef.current), 0);
+    }
+  }, [filter, focusFeature, setDebug, styleFor, vlm]);
 
   useEffect(() => {
     if (!nodeRef.current || mapRef.current) return;
@@ -233,59 +291,8 @@ export default function MapPanel({ aoi, mode, opacity, filter, vlm, selectedId, 
   }, [aoi.layers.afterImage, aoi.layers.beforeImage, filter, mode, setDebug, vlm]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !selectedId) return;
-    const feature = featuresRef.current.find((candidate) => candidate.properties.id === selectedId);
-    let olFeature = olFeatureByIdRef.current.get(selectedId);
-    if (!feature) return;
-    if (!olFeature) {
-      olFeature = new GeoJSON().readFeature(feature, {
-        dataProjection: "EPSG:4326",
-        featureProjection: "EPSG:3857",
-      }) as OlDamageFeature;
-      olFeature.original = feature;
-    }
-    const extent = olFeature.getGeometry()?.getExtent();
-    const centroidLat = Number(feature.properties.centroid_lat);
-    const centroidLon = Number(feature.properties.centroid_lon);
-    const center = Number.isFinite(centroidLat) && Number.isFinite(centroidLon)
-      ? fromLonLat([centroidLon, centroidLat])
-      : extent
-        ? getCenter(extent)
-        : undefined;
-    if (!center) return;
-    map.getView().setCenter(center);
-    map.getView().setZoom(18);
-    highlightRef.current?.getSource()?.clear();
-    if (olFeature.getGeometry()) {
-      const highlightFeature = olFeature.clone() as OlDamageFeature;
-      highlightFeature.original = feature;
-      highlightRef.current?.getSource()?.addFeature(highlightFeature);
-    }
-    highlightRef.current?.setStyle(new Style({
-      stroke: new Stroke({ color: "#ffffff", width: 5 }),
-      fill: new Fill({ color: "rgba(255,255,255,0.08)" }),
-    }));
-    markerRef.current?.getSource()?.clear();
-    const markerFeature = new Feature({ geometry: new GeoJSON().readGeometry({ type: "Point", coordinates: toLonLat(center) }, { dataProjection: "EPSG:4326", featureProjection: "EPSG:3857" }) });
-    markerRef.current?.getSource()?.addFeature(markerFeature);
-    markerRef.current?.setStyle(new Style({
-      image: new CircleStyle({
-        radius: 10,
-        stroke: new Stroke({ color: "#ffffff", width: 3 }),
-        fill: new Fill({ color: "rgba(196,33,40,0.28)" }),
-      }),
-    }));
-    if (popupRef.current) {
-      popupRef.current.innerHTML = popupHtml(feature.properties);
-      popupOverlayRef.current?.setPosition(center);
-    }
-    const [lng, lat] = toLonLat(center);
-    nodeRef.current?.setAttribute("data-focused-id", selectedId);
-    nodeRef.current?.setAttribute("data-map-center", `${lat.toFixed(7)},${lng.toFixed(7)}`);
-    nodeRef.current?.setAttribute("data-map-zoom", String(map.getView().getZoom()));
-    setDebug(featuresRef.current.filter((candidate) => passesFilter(candidate, filter, vlm)));
-  }, [filter, selectedId, setDebug, vlm]);
+    focusFeature(selectedId);
+  }, [focusFeature, selectedId]);
 
   return (
     <>

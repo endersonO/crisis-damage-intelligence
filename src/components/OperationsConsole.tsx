@@ -297,8 +297,8 @@ export default function OperationsConsole() {
               const label = String(vlm[p.id]?.vlm?.damage_class ?? p.damage_class ?? p.damage_gra ?? "candidate");
               return (
                 <button key={p.id} data-testid={`priority-${p.id}`} className={selected?.properties.id === p.id ? "priority-row active" : "priority-row"} onClick={() => {
-                  setFilter("all");
                   setSelected(feature);
+                  setFilter("all");
                 }}>
                   <b>{p.id}</b>
                   <span>{label} · {String(p.damage_score ?? p.damage_percent ?? "-")}</span>
