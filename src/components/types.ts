@@ -14,6 +14,8 @@ export type AoiRecord = {
     damage: string;
     beforeImage?: string;
     afterImage?: string;
+    beforeTiles?: string;
+    afterTiles?: string;
     vlm?: string;
   };
   imagery?: {

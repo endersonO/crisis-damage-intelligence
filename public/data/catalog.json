@@ -35,7 +35,8 @@
       "layers": {
         "damage": "/data/aoi/emsr884-aoi02-caracas/damage.geojson",
         "afterImage": "https://rapidmapping-viewer.s3.eu-west-1.amazonaws.com/EMSR884/AOI02/GRA_PRODUCT/EMSR884_AOI02_GRA_PRODUCT_PNEO_20260625_1459_ORTHO_cog.tif",
-        "vlm": "/data/aoi/emsr884-aoi02-caracas/vlm_review.jsonl"
+        "vlm": "/data/aoi/emsr884-aoi02-caracas/vlm_review.jsonl",
+        "afterTiles": "/data/tiles/emsr884-aoi02-caracas/after/{z}/{x}/{y}.webp"
       },
       "metrics": {
         "features": 17,
@@ -51,7 +52,15 @@
           "acquisitionUtc": "2026-06-25T14:59:00",
           "bytes": 188120283,
           "sha256": "eb5a904185724597778f2846582a1884a2cf00e13934b09062ff70eafc87e43b",
-          "r2Key": "ems/rasters/after/emsr884-aoi02-caracas/EMSR884_AOI02_GRA_PRODUCT_PNEO_20260625_1459_ORTHO_cog.tif"
+          "r2Key": "ems/rasters/after/emsr884-aoi02-caracas/EMSR884_AOI02_GRA_PRODUCT_PNEO_20260625_1459_ORTHO_cog.tif",
+          "tilePyramid": {
+            "urlTemplate": "/data/tiles/emsr884-aoi02-caracas/after/{z}/{x}/{y}.webp",
+            "format": "webp",
+            "minZoom": 12,
+            "maxZoom": 18,
+            "tileCount": 10092,
+            "bytesApprox": 42000000
+          }
         },
         "before": null,
         "note": "Post-event COG only. No EMSR884 before imagery pair is exposed for this AOI yet."
@@ -144,7 +153,8 @@
       "layers": {
         "damage": "/data/aoi/emsr884-aoi06-moron/damage.geojson",
         "afterImage": "https://rapidmapping-viewer.s3.eu-west-1.amazonaws.com/EMSR884/AOI06/GRA_PRODUCT/EMSR884_AOI06_GRA_PRODUCT_LEGION_20260625_2036_ORTHO_cog.tif",
-        "vlm": "/data/aoi/emsr884-aoi06-moron/vlm_review.jsonl"
+        "vlm": "/data/aoi/emsr884-aoi06-moron/vlm_review.jsonl",
+        "afterTiles": "/data/tiles/emsr884-aoi06-moron/after/{z}/{x}/{y}.webp"
       },
       "metrics": {
         "features": 129,
@@ -160,7 +170,15 @@
           "acquisitionUtc": "2026-06-25T20:36:00",
           "bytes": 311844612,
           "sha256": "95d73a91b221c1604381258ae8dfdb24607726b72f47221800be9ffbb2d105fd",
-          "r2Key": "ems/rasters/after/emsr884-aoi06-moron/EMSR884_AOI06_GRA_PRODUCT_LEGION_20260625_2036_ORTHO_cog.tif"
+          "r2Key": "ems/rasters/after/emsr884-aoi06-moron/EMSR884_AOI06_GRA_PRODUCT_LEGION_20260625_2036_ORTHO_cog.tif",
+          "tilePyramid": {
+            "urlTemplate": "/data/tiles/emsr884-aoi06-moron/after/{z}/{x}/{y}.webp",
+            "format": "webp",
+            "minZoom": 12,
+            "maxZoom": 18,
+            "tileCount": 4554,
+            "bytesApprox": 25000000
+          }
         },
         "before": null,
         "note": "Post-event COG only. No EMSR884 before imagery pair is exposed for this AOI yet."

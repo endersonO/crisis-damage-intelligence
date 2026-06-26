@@ -47,6 +47,7 @@ type Props = {
 };
 
 type OlDamageFeature = Feature & { original?: DamageFeature };
+type RasterLayer = WebGLTileLayer | TileLayer<XYZ>;
 
 function damageClass(properties: DamageFeature["properties"]) {
   const raw = String(properties.damage_class ?? properties.damage_gra ?? properties.confirmed_damage_class ?? "").toLowerCase();
@@ -77,8 +78,8 @@ export default function MapPanel({ aoi, mode, opacity, filter, basemap, vlm, sel
   const mapRef = useRef<OlMap | null>(null);
   const baseRef = useRef<TileLayer<OSM> | null>(null);
   const aerialBaseRef = useRef<TileLayer<XYZ> | null>(null);
-  const beforeRef = useRef<WebGLTileLayer | null>(null);
-  const afterRef = useRef<WebGLTileLayer | null>(null);
+  const beforeRef = useRef<RasterLayer | null>(null);
+  const afterRef = useRef<RasterLayer | null>(null);
   const vectorRef = useRef<VectorLayer<VectorSource> | null>(null);
   const highlightRef = useRef<VectorLayer<VectorSource> | null>(null);
   const markerRef = useRef<VectorLayer<VectorSource> | null>(null);
@@ -272,22 +273,36 @@ export default function MapPanel({ aoi, mode, opacity, filter, basemap, vlm, sel
     markerRef.current?.getSource()?.clear();
     popupOverlayRef.current?.setPosition(undefined);
 
-    if (aoi.layers.beforeImage) {
-      beforeRef.current = new WebGLTileLayer({
-        source: new GeoTIFF({ sources: [{ url: aoi.layers.beforeImage }], convertToRGB: "auto" }),
-        opacity: 1,
-        visible: modeRef.current === "before",
-        zIndex: 10,
-      });
+    if (aoi.layers.beforeTiles || aoi.layers.beforeImage) {
+      beforeRef.current = aoi.layers.beforeTiles
+        ? new TileLayer({
+          source: new XYZ({ url: aoi.layers.beforeTiles, maxZoom: 18, minZoom: 12, transition: 0 }),
+          opacity: 1,
+          visible: modeRef.current === "before",
+          zIndex: 10,
+        })
+        : new WebGLTileLayer({
+          source: new GeoTIFF({ sources: [{ url: aoi.layers.beforeImage as string }], convertToRGB: "auto" }),
+          opacity: 1,
+          visible: modeRef.current === "before",
+          zIndex: 10,
+        });
       map.addLayer(beforeRef.current);
     }
-    if (aoi.layers.afterImage) {
-      afterRef.current = new WebGLTileLayer({
-        source: new GeoTIFF({ sources: [{ url: aoi.layers.afterImage }], convertToRGB: "auto" }),
-        opacity: 1,
-        visible: modeRef.current === "after",
-        zIndex: 11,
-      });
+    if (aoi.layers.afterTiles || aoi.layers.afterImage) {
+      afterRef.current = aoi.layers.afterTiles
+        ? new TileLayer({
+          source: new XYZ({ url: aoi.layers.afterTiles, maxZoom: 18, minZoom: 12, transition: 0 }),
+          opacity: 1,
+          visible: modeRef.current === "after",
+          zIndex: 11,
+        })
+        : new WebGLTileLayer({
+          source: new GeoTIFF({ sources: [{ url: aoi.layers.afterImage as string }], convertToRGB: "auto" }),
+          opacity: 1,
+          visible: modeRef.current === "after",
+          zIndex: 11,
+        });
       map.addLayer(afterRef.current);
     }
 
