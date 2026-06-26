@@ -16,6 +16,25 @@ export type AoiRecord = {
     afterImage?: string;
     vlm?: string;
   };
+  imagery?: {
+    before: null | {
+      url: string;
+      sensor?: string;
+      acquisitionUtc?: string;
+      bytes?: number;
+      sha256?: string;
+      r2Key?: string;
+    };
+    after: null | {
+      url: string;
+      sensor?: string;
+      acquisitionUtc?: string;
+      bytes?: number;
+      sha256?: string;
+      r2Key?: string;
+    };
+    note?: string;
+  };
   metrics: Record<string, number>;
 };
 

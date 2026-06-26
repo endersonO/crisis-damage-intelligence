@@ -21,7 +21,10 @@ const copy = {
     mode: "Image",
     before: "Before",
     after: "After",
-    noImagery: "No before/after imagery for this AOI",
+    noImagery: "No imagery exposed for this AOI yet",
+    noBefore: "Before imagery is not exposed yet. Showing post-event imagery where available.",
+    imageryAvailable: "Post-event imagery available",
+    imageryOnly: "Imagery only - no official damage vector yet",
     opacity: "Damage opacity",
     filters: "Filters",
     all: "All",
@@ -45,6 +48,7 @@ const copy = {
     statuses: {
       "test-fixture": "Readiness test",
       "official-vector": "Official EMS vector",
+      "imagery-only": "Imagery only",
       waiting: "Waiting",
       "in-production": "In production",
     },
@@ -65,7 +69,10 @@ const copy = {
     mode: "Imagen",
     before: "Antes",
     after: "Despues",
-    noImagery: "Sin imagen antes/despues para este AOI",
+    noImagery: "Sin imagen expuesta para este AOI todavia",
+    noBefore: "La imagen antes no esta expuesta todavia. Se muestra imagen posterior donde exista.",
+    imageryAvailable: "Imagen posterior disponible",
+    imageryOnly: "Solo imagen - sin vector oficial de danos aun",
     opacity: "Opacidad de daño",
     filters: "Filtros",
     all: "Todos",
@@ -89,6 +96,7 @@ const copy = {
     statuses: {
       "test-fixture": "Prueba de preparación",
       "official-vector": "Vector oficial EMS",
+      "imagery-only": "Solo imagen",
       waiting: "En espera",
       "in-production": "En producción",
     },
@@ -134,7 +142,9 @@ export default function OperationsConsole() {
 
   const t = copy[language];
   const metrics = active?.metrics;
-  const hasImagery = Boolean(active?.layers.beforeImage && active.layers.afterImage);
+  const hasBeforeImagery = Boolean(active?.layers.beforeImage);
+  const hasAfterImagery = Boolean(active?.layers.afterImage);
+  const hasImagery = hasBeforeImagery || hasAfterImagery;
   const isDemo = active?.status === "test-fixture";
   const statusLabel = (status: string) => t.statuses[status as keyof typeof t.statuses] ?? status;
   const selectAoi = (id: string) => {
@@ -227,10 +237,11 @@ export default function OperationsConsole() {
           <div className="control-group">
             <span>{t.mode}</span>
             <div className="button-row">
-              <button data-testid="mode-before" disabled={!hasImagery} className={mode === "before" ? "active" : ""} onClick={() => setMode("before")}>{t.before}</button>
-              <button data-testid="mode-after" disabled={!hasImagery} className={mode === "after" ? "active" : ""} onClick={() => setMode("after")}>{t.after}</button>
+              <button data-testid="mode-before" disabled={!hasBeforeImagery} className={mode === "before" ? "active" : ""} onClick={() => setMode("before")}>{t.before}</button>
+              <button data-testid="mode-after" disabled={!hasAfterImagery} className={mode === "after" ? "active" : ""} onClick={() => setMode("after")}>{t.after}</button>
             </div>
             {!hasImagery && <em className="control-note">{t.noImagery}</em>}
+            {hasAfterImagery && !hasBeforeImagery && <em className="control-note">{t.noBefore}</em>}
           </div>
           <label className="range-control">
             <span>{t.opacity} <b>{opacity}%</b></span>
@@ -261,6 +272,19 @@ export default function OperationsConsole() {
             <p className="muted">{t.noSelection}</p>
           )}
         </section>
+        {active?.imagery?.after && (
+          <section className="imagery-panel">
+            <h2>{t.imageryAvailable}</h2>
+            <dl>
+              <div><dt>AOI</dt><dd>{active.id}</dd></div>
+              <div><dt>Sensor</dt><dd>{active.imagery.after.sensor ?? "-"}</dd></div>
+              <div><dt>UTC</dt><dd>{active.imagery.after.acquisitionUtc ?? "-"}</dd></div>
+              <div><dt>Size</dt><dd>{formatBytes(active.imagery.after.bytes)}</dd></div>
+            </dl>
+            {!active.metrics.features && <p className="muted">{t.imageryOnly}</p>}
+            <div className="download-row"><a href={active.imagery.after.url} target="_blank">COG</a></div>
+          </section>
+        )}
         <section className="confidence-panel">
           <h2>{t.confidenceTitle}</h2>
           <p>{t.confidenceText}</p>
@@ -299,6 +323,12 @@ export default function OperationsConsole() {
       </aside>
     </main>
   );
+}
+
+function formatBytes(bytes?: number) {
+  if (!bytes) return "-";
+  if (bytes > 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
+  return `${Math.round(bytes / 1_000_000)} MB`;
 }
 
 function Evidence({ feature, vlm, language }: { feature: DamageFeature; vlm?: VlmRecord; language: Language }) {
