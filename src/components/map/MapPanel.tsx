@@ -325,11 +325,13 @@ export default function MapPanel({ aoi, mode, opacity, filter, basemap, vlm, sel
   }, [renderVectors]);
 
   useEffect(() => {
-    beforeRef.current?.setVisible(mode === "before" && Boolean(aoi.layers.beforeImage));
-    afterRef.current?.setVisible(mode === "after" && Boolean(aoi.layers.afterImage));
-    if (!aoi.layers.beforeImage && mode === "before") afterRef.current?.setVisible(false);
+    const hasBefore = Boolean(aoi.layers.beforeTiles || aoi.layers.beforeImage);
+    const hasAfter = Boolean(aoi.layers.afterTiles || aoi.layers.afterImage);
+    beforeRef.current?.setVisible(mode === "before" && hasBefore);
+    afterRef.current?.setVisible(mode === "after" && hasAfter);
+    if (!hasBefore && mode === "before") afterRef.current?.setVisible(false);
     setDebug(featuresRef.current.filter((feature) => passesFilter(feature, filter, vlm)));
-  }, [aoi.layers.afterImage, aoi.layers.beforeImage, filter, mode, setDebug, vlm]);
+  }, [aoi.layers.afterImage, aoi.layers.afterTiles, aoi.layers.beforeImage, aoi.layers.beforeTiles, filter, mode, setDebug, vlm]);
 
   useEffect(() => {
     focusFeature(selectedId);

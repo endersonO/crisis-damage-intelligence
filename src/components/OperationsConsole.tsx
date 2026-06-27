@@ -152,8 +152,8 @@ export default function OperationsConsole() {
 
   const t = copy[language];
   const metrics = active?.metrics;
-  const hasBeforeImagery = Boolean(active?.layers.beforeImage);
-  const hasAfterImagery = Boolean(active?.layers.afterImage);
+  const hasBeforeImagery = Boolean(active?.layers.beforeTiles || active?.layers.beforeImage);
+  const hasAfterImagery = Boolean(active?.layers.afterTiles || active?.layers.afterImage);
   const hasImagery = hasBeforeImagery || hasAfterImagery;
   const isDemo = active?.status === "test-fixture";
   const statusLabel = (status: string) => t.statuses[status as keyof typeof t.statuses] ?? status;

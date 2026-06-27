@@ -343,7 +343,8 @@
         "damage": "/data/aoi/emsr884-aoi12-caraballeda/damage.geojson",
         "afterImage": "https://rapidmapping-viewer.s3.eu-west-1.amazonaws.com/EMSR884/AOI12/GRA_PRODUCT/EMSR884_AOI12_GRA_PRODUCT_LEGION_20260626_1510_ORTHO_cog.tif",
         "afterTiles": "/data/tiles/emsr884-aoi12-caraballeda/after/{z}/{x}/{y}.webp",
-        "vlm": "/data/aoi/emsr884-aoi12-caraballeda/vlm_review.jsonl"
+        "vlm": "/data/aoi/emsr884-aoi12-caraballeda/vlm_review.jsonl",
+        "beforeTiles": "/data/tiles/emsr884-aoi12-caraballeda/before/{z}/{x}/{y}.webp"
       },
       "metrics": {
         "features": 120,
@@ -370,8 +371,50 @@
             "quality": 75
           }
         },
-        "before": null,
-        "note": "Post-event COG only. No EMSR884 before imagery pair is exposed for this AOI yet."
+        "before": {
+          "url": "/data/tiles/emsr884-aoi12-caraballeda/before/{z}/{x}/{y}.webp",
+          "sensor": "Vantor Open Data mosaic: LG02, LG03, LG06",
+          "acquisitionUtc": "2025-11-03T12:56:33Z / 2026-03-21T14:31:32Z / 2026-04-07T15:14:46Z",
+          "bytes": null,
+          "sha256": null,
+          "r2Key": null,
+          "source": "Vantor Open Data pre-event reference, not Copernicus EMS official before imagery",
+          "coverage": "Partial AOI12 coverage mosaic. Best available pre-event reference scenes; visible gaps may remain where no pre-event Vantor scene covered the AOI.",
+          "license": "CC-BY-NC-4.0",
+          "tilePyramid": {
+            "urlTemplate": "/data/tiles/emsr884-aoi12-caraballeda/before/{z}/{x}/{y}.webp",
+            "format": "webp",
+            "minZoom": 12,
+            "maxZoom": 18,
+            "tileCount": 7744,
+            "bytesApprox": 32136650,
+            "quality": 75
+          },
+          "sourceScenes": [
+            {
+              "id": "B130001101BE2A00",
+              "sensor": "LG03",
+              "acquisitionUtc": "2025-11-03T12:56:33.749851Z",
+              "cloudCover": 0,
+              "url": "https://vantor-opendata.s3.amazonaws.com/events/Venezuela-Earthquake-Jun-2026/B130001101BE2A00.tif"
+            },
+            {
+              "id": "B160001100FF4510",
+              "sensor": "LG06",
+              "acquisitionUtc": "2026-03-21T14:31:32.374596Z",
+              "cloudCover": 3,
+              "url": "https://vantor-opendata.s3.amazonaws.com/events/Venezuela-Earthquake-Jun-2026/B160001100FF4510.tif"
+            },
+            {
+              "id": "B120001100513B10",
+              "sensor": "LG02",
+              "acquisitionUtc": "2026-04-07T15:14:46.124708Z",
+              "cloudCover": 12,
+              "url": "https://vantor-opendata.s3.amazonaws.com/events/Venezuela-Earthquake-Jun-2026/B120001100513B10.tif"
+            }
+          ]
+        },
+        "note": "After imagery is official Copernicus EMS post-event COG/tiles. Before imagery is Vantor Open Data pre-event reference mosaic, not official EMS before imagery, and may have partial coverage/gaps."
       }
     }
   ],
