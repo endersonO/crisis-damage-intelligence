@@ -1,0 +1,32 @@
+{
+  "updatedAt": "2026-06-27T20:45:00Z",
+  "sources": [
+    {
+      "id": "hdx-msft-catia-la-mar-predicted-damage",
+      "title": "Venezuela Earthquakes: Building Damage Assessment in Catia La Mar",
+      "provider": "Microsoft AI for Good Lab via HDX",
+      "type": "external predicted building-footprint damage",
+      "status": "added_as_external_prediction_layer",
+      "packageModifiedUtc": "2026-06-27T15:03:50.421777",
+      "resources": [
+        {
+          "name": "predicted_damage_catia_la_mar_footprints.gpkg",
+          "format": "GPKG",
+          "lastModifiedUtc": "2026-06-26T05:16:28.651374",
+          "url": "https://data.humdata.org/dataset/029efb88-3a8a-40d9-8aea-65477e6eb744/resource/684fdeab-e4ac-4029-9ec9-891676b2ebfc/download/predicted_damage_catia_la_mar_footprints.gpkg"
+        }
+      ],
+      "caveat": "Triage aid only. Not official EMS source-of-truth. The app exports only damaged=1 features from the source layer."
+    },
+    {
+      "id": "hdx-hot-venezuela-earthquake-osm-overture",
+      "title": "Venezuela - M 7.5 Earthquake - June 2026 - OSM & Overture Data",
+      "provider": "Humanitarian OpenStreetMap Team (HOT) via HDX",
+      "type": "context data: buildings, roads, POI, health, education, airports, seaports, Overture buildings, fAIr predictions",
+      "status": "documented_not_loaded_by_default",
+      "packageModifiedUtc": "2026-06-27T08:13:59.555654",
+      "url": "https://data.humdata.org/dataset/hot_eq_ven",
+      "caveat": "Useful for context and exposure analysis, but national-scale Overture buildings are hundreds of MB and should remain out of the Vercel bundle until tiled/split."
+    }
+  ]
+}

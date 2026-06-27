@@ -52,7 +52,7 @@ type RasterLayer = WebGLTileLayer | TileLayer<XYZ>;
 function damageClass(properties: DamageFeature["properties"]) {
   const raw = String(properties.damage_class ?? properties.damage_gra ?? properties.confirmed_damage_class ?? "").toLowerCase();
   if (raw.includes("possibly")) return "possible";
-  if (raw.includes("destroy") || raw.includes("major") || raw === "damaged" || raw === "major_damage") return "severe";
+  if (raw.includes("destroy") || raw.includes("major") || raw.includes("damaged") || raw === "major_damage") return "severe";
   if (raw.includes("minor") || raw.includes("possible")) return "possible";
   if (raw.includes("uncertain")) return "uncertain";
   return "low";
@@ -363,9 +363,10 @@ function escapeHtml(value: string) {
 
 function popupHtml(p: DamageFeature["properties"]) {
   const mapsUrl = typeof p.google_maps_url === "string" ? p.google_maps_url : "";
+  const label = p.not_official_ems ? "External" : "EMS";
   return (
     `<strong>${escapeHtml(p.id)}</strong><br/>` +
-    `EMS: <strong>${escapeHtml(String(p.damage_gra ?? p.damage_class ?? "unknown"))}</strong><br/>` +
+    `${label}: <strong>${escapeHtml(String(p.damage_gra ?? p.damage_class ?? "unknown"))}</strong><br/>` +
     `Damage: ${escapeHtml(String(p.damage_percent ?? p.damage_score ?? "-"))}%<br/>` +
     (mapsUrl ? `<a href="${escapeHtml(mapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>` : "")
   );

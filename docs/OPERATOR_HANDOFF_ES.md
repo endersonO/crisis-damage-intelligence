@@ -7,7 +7,7 @@ Usar el mapa para ubicar rapidamente poligonos oficiales de daño de Copernicus 
 ## Como usarlo
 
 1. Abra la app y confirme que el AOI activo sea un AOI operativo de Venezuela, no el demo xBD.
-2. Use el selector de AOI para cambiar entre `AOI02 Caracas` y `AOI06 Moron`.
+2. Use el selector de AOI para cambiar entre AOIs operativos como `AOI12 Caraballeda / La Guaira`, `AOI06 Moron`, `AOI08 San Felipe` y `AOI02 Caracas`.
 3. Revise los indicadores:
    - `estructuras`: numero de poligonos built-up en el AOI.
    - `destruidos/dañados oficiales`: suma de `Destroyed` + `Damaged` segun EMS.
@@ -26,6 +26,7 @@ Usar el mapa para ubicar rapidamente poligonos oficiales de daño de Copernicus 
 - `Destroyed` y `Damaged` se tratan como daño confirmado por el producto EMS.
 - `Possibly damaged` se muestra por separado. No debe contarse como destruido/dañado confirmado.
 - VLM, si aparece, es evidencia auxiliar para priorizar revision; no reemplaza EMS ni validacion humana.
+- La capa `Catia La Mar - Daño predicho Microsoft AI4G` viene de HDX/Microsoft AI for Good Lab. Es prediccion externa de huellas dañadas, util para triage, pero no es etiqueta oficial EMS.
 
 ## No Sobreafirmar
 
@@ -36,17 +37,13 @@ Usar el mapa para ubicar rapidamente poligonos oficiales de daño de Copernicus 
 
 ## Limitaciones Conocidas
 
-- AOI02/AOI06 validan la ruta vectorial EMS, pero no incluyen imagen antes/despues en el mapa.
+- AOI12 ya incluye vector oficial EMS, imagen posterior EMS y referencia pre-evento Vantor. La referencia Vantor no es imagen oficial EMS y puede tener huecos.
+- La capa externa Microsoft/HDX tiene 9,134 candidatos predichos en Catia La Mar; debe usarse como indicio adicional, no como conteo oficial de daño.
 - Los poligonos `builtUpA` son features oficiales de evaluacion built-up; no siempre equivalen a un edificio individual.
 - Para AOIs grandes puede ser necesario convertir GeoJSON a PMTiles/vector tiles.
-- La Guaira/AOI12 aun depende de que Copernicus publique el ZIP GRA.
+- Los datasets HOT/HDX nacionales de edificios/caminos/POI son utiles para contexto, pero no se cargan por defecto porque son pesados para Vercel.
 
-## Cuando AOI12 Este Disponible
+## Nuevas fuentes revisadas
 
-1. Descargar el ZIP GRA oficial de AOI12.
-2. Ejecutar el importador EMS.
-3. Revisar conteos contra summary table/PDF.
-4. Copiar CSV/GeoJSON/KML/metadata a `public/data/aoi/emsr884-aoi12-caraballeda`.
-5. Agregar AOI12 al catalogo.
-6. Correr QA de navegador.
-7. Publicar paquete estatico en Vercel.
+- Microsoft AI for Good Lab via HDX: `Venezuela Earthquakes: Building Damage Assessment in Catia La Mar`. Agregado como AOI externo con 9,134 huellas `damaged=1`.
+- HOT via HDX: `Venezuela - M 7.5 Earthquake - June 2026 - OSM & Overture Data`. Documentado como fuente de contexto; no cargado por defecto por tamaño.

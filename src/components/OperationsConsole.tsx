@@ -45,6 +45,7 @@ const copy = {
     chip: "Open evidence chip",
     maps: "Google Maps",
     officialData: "Operational EMSR884 data",
+    externalPrediction: "External predicted damage - triage only",
     demoOnly: "Demo/VLM benchmark - not Venezuela operational data",
     confidenceTitle: "Data confidence",
     confidenceText:
@@ -52,6 +53,7 @@ const copy = {
     statuses: {
       "test-fixture": "Readiness test",
       "official-vector": "Official EMS vector",
+      "external-prediction": "External prediction",
       "imagery-only": "Imagery only",
       waiting: "Waiting",
       "in-production": "In production",
@@ -97,6 +99,7 @@ const copy = {
     chip: "Abrir chip de evidencia",
     maps: "Google Maps",
     officialData: "Datos operativos EMSR884",
+    externalPrediction: "Predicción externa de daño - solo triage",
     demoOnly: "Demo/benchmark VLM - no es dato operativo de Venezuela",
     confidenceTitle: "Confianza del dato",
     confidenceText:
@@ -104,6 +107,7 @@ const copy = {
     statuses: {
       "test-fixture": "Prueba de preparación",
       "official-vector": "Vector oficial EMS",
+      "external-prediction": "Predicción externa",
       "imagery-only": "Solo imagen",
       waiting: "En espera",
       "in-production": "En producción",
@@ -156,6 +160,7 @@ export default function OperationsConsole() {
   const hasAfterImagery = Boolean(active?.layers.afterTiles || active?.layers.afterImage);
   const hasImagery = hasBeforeImagery || hasAfterImagery;
   const isDemo = active?.status === "test-fixture";
+  const isExternalPrediction = active?.status === "external-prediction";
   const statusLabel = (status: string) => t.statuses[status as keyof typeof t.statuses] ?? status;
   const selectAoi = (id: string) => {
     setActiveId(id);
@@ -205,8 +210,8 @@ export default function OperationsConsole() {
 
         {active && (
           <section className="source-card">
-            <div className={isDemo ? "source-banner demo" : "source-banner official"}>
-              {isDemo ? t.demoOnly : t.officialData}
+            <div className={(isDemo || isExternalPrediction) ? "source-banner demo" : "source-banner official"}>
+              {isDemo ? t.demoOnly : isExternalPrediction ? t.externalPrediction : t.officialData}
             </div>
             <strong>{t.source}</strong>
             <p>{active.source}</p>

@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-27T14:22:12Z",
+  "updatedAt": "2026-06-27T20:45:00Z",
   "platform": "Crisis Damage Intelligence",
   "aois": [
     {
@@ -415,6 +415,55 @@
           ]
         },
         "note": "After imagery is official Copernicus EMS post-event COG/tiles. Before imagery is Vantor Open Data pre-event reference mosaic, not official EMS before imagery, and may have partial coverage/gaps."
+      }
+    },
+    {
+      "id": "external-msft-catia-la-mar-predicted-damage",
+      "country": "Venezuela",
+      "event": "Venezuela earthquake June 2026",
+      "name": {
+        "en": "Catia La Mar - Microsoft AI4G Predicted Damage",
+        "es": "Catia La Mar - Da\u00f1o predicho Microsoft AI4G"
+      },
+      "status": "external-prediction",
+      "source": "HDX dataset from Microsoft AI for Good Lab: Venezuela Earthquakes: Building Damage Assessment in Catia La Mar. External predicted building-footprint damage, not official Copernicus EMS damage labels.",
+      "bounds": [
+        [
+          10.559730392756398,
+          -67.10968478093005
+        ],
+        [
+          10.613965524545677,
+          -66.99680888316503
+        ]
+      ],
+      "center": [
+        10.593469756538651,
+        -67.0374313975316
+      ],
+      "downloads": {
+        "csv": "/data/aoi/external-msft-catia-la-mar-predicted-damage/damage.csv",
+        "geojson": "/data/aoi/external-msft-catia-la-mar-predicted-damage/damage.geojson",
+        "kml": "/data/aoi/external-msft-catia-la-mar-predicted-damage/damage.kml",
+        "metadata": "/data/aoi/external-msft-catia-la-mar-predicted-damage/source_metadata.json",
+        "hdx": "https://data.humdata.org/dataset/venezuela-earthquakes-catia-la-mar",
+        "source_gpkg": "https://data.humdata.org/dataset/029efb88-3a8a-40d9-8aea-65477e6eb744/resource/684fdeab-e4ac-4029-9ec9-891676b2ebfc/download/predicted_damage_catia_la_mar_footprints.gpkg"
+      },
+      "layers": {
+        "damage": "/data/aoi/external-msft-catia-la-mar-predicted-damage/damage.geojson"
+      },
+      "metrics": {
+        "features": 9134,
+        "destroyed": 0,
+        "damagedConfirmed": 0,
+        "possibleDamage": 0,
+        "candidates": 9134,
+        "vlmReviewed": 0
+      },
+      "imagery": {
+        "before": null,
+        "after": null,
+        "note": "No imagery is bundled with this external prediction layer. Use the aerial basemap as context. Official EMS AOI12 before/after imagery remains in the AOI12 record."
       }
     }
   ],
