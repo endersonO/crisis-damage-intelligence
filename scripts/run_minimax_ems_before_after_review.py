@@ -43,7 +43,8 @@ BEFORE_SOURCE_LABEL = {
 
 SYSTEM = (
     "You are assisting emergency earthquake damage triage by comparing pre-event and post-event aerial/satellite chips. "
-    "You will receive a before chip and an after chip for the same EMS mapped feature centroid. "
+    "You will receive a before chip and an after chip for the same EMS mapped feature. "
+    "The red/white reticle marks the EMS centroid. A yellow/black outline, when visible, marks the EMS feature footprint/geometry. "
     "Be conservative: VLM output is a triage aid, not official confirmation. "
     "Return only valid JSON with keys damage_class, damage_percent, confidence, change_evidence, before_observation, "
     "after_observation, image_alignment, image_quality, action_priority, uncertainty_reason. "
@@ -79,6 +80,35 @@ def degree_window(lon: float, lat: float, size_m: int) -> tuple[float, float, fl
     return lon - half_lon, lat + half_lat, lon + half_lon, lat - half_lat
 
 
+def lonlat_to_chip_pixel(lon: float, lat: float, window: tuple[float, float, float, float], chip_size: int = 512) -> tuple[float, float]:
+    min_lon, max_lat, max_lon, min_lat = window
+    x = (lon - min_lon) / (max_lon - min_lon) * chip_size
+    y = (max_lat - lat) / (max_lat - min_lat) * chip_size
+    return x, y
+
+
+def geometry_rings(geometry: dict) -> list[list[tuple[float, float]]]:
+    if not geometry:
+        return []
+    kind = geometry.get("type")
+    coords = geometry.get("coordinates", [])
+    if kind == "Polygon":
+        return [[(float(lon), float(lat)) for lon, lat, *_ in ring] for ring in coords]
+    if kind == "MultiPolygon":
+        return [[(float(lon), float(lat)) for lon, lat, *_ in ring] for poly in coords for ring in poly]
+    return []
+
+
+def draw_feature_outline(draw, feature: dict, window: tuple[float, float, float, float], chip_size: int = 512) -> None:
+    for ring in geometry_rings(feature.get("geometry", {})):
+        points = [lonlat_to_chip_pixel(lon, lat, window, chip_size) for lon, lat in ring]
+        visible = [(x, y) for x, y in points if -64 <= x <= chip_size + 64 and -64 <= y <= chip_size + 64]
+        if len(visible) < 2:
+            continue
+        draw.line(points, fill=(0, 0, 0), width=6, joint="curve")
+        draw.line(points, fill=(255, 221, 58), width=3, joint="curve")
+
+
 def encode_image(path: Path) -> str:
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
 
@@ -95,7 +125,8 @@ def make_chip(cog: str | Path, feature: dict, out: Path, size_m: int = 96) -> bo
     props = feature["properties"]
     lat = float(props["centroid_lat"])
     lon = float(props["centroid_lon"])
-    min_lon, max_lat, max_lon, min_lat = degree_window(lon, lat, size_m)
+    window = degree_window(lon, lat, size_m)
+    min_lon, max_lat, max_lon, min_lat = window
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".raw.png")
     cmd = [
@@ -130,6 +161,7 @@ def make_chip(cog: str | Path, feature: dict, out: Path, size_m: int = 96) -> bo
         tmp.with_suffix(tmp.suffix + ".aux.xml").unlink(missing_ok=True)
         return False
     draw = ImageDraw.Draw(image)
+    draw_feature_outline(draw, feature, window)
     cx = cy = 256
     draw.ellipse((cx - 9, cy - 9, cx + 9, cy + 9), outline=(255, 255, 255), width=4)
     draw.ellipse((cx - 6, cy - 6, cx + 6, cy + 6), outline=(220, 38, 38), width=3)
@@ -168,6 +200,7 @@ def call_minimax(item: dict) -> dict:
     prompt = (
         "Compare the before and after chips for emergency earthquake damage triage. "
         "Both chips are centered on the same EMS mapped feature centroid marked by the reticle. "
+        "If a yellow/black outline is visible, use it as the mapped EMS feature footprint/geometry and evaluate the outlined area, not only the reticle pixel. "
         f"AOI: {item['aoi_id']}. Feature: {item['id']}. Official EMS label: {item['ems_damage_gra']}. "
         f"Official EMS percent: {item.get('ems_damage_percent')}. "
         f"Before source: {item['before_source_label']}. "
@@ -229,12 +262,16 @@ def public_chip(path: Path) -> str:
     return "/data/chips/" + path.relative_to(ROOT / "public" / "data" / "chips").as_posix()
 
 
-def make_record(aoi_id: str, before_cog: str | Path, after_cog: str | Path, feature: dict) -> dict | None:
+def make_record(aoi_id: str, before_cog: str | Path, after_cog: str | Path, feature: dict, force: bool = False) -> dict | None:
     props = feature["properties"]
     fid = props["id"]
     before_chip = chip_path(aoi_id, fid, "before_event")
     after_chip = chip_path(aoi_id, fid, "after_event")
     compare_chip = chip_path(aoi_id, fid, "before_after_compare")
+    if force:
+        before_chip.unlink(missing_ok=True)
+        after_chip.unlink(missing_ok=True)
+        compare_chip.unlink(missing_ok=True)
     if not before_chip.exists() and not make_chip(before_cog, feature, before_chip):
         return None
     if not after_chip.exists():
@@ -267,6 +304,7 @@ def write_summary(aoi_id: str, records: list[dict]) -> None:
     out_dir = ROOT / "public" / "data" / "aoi" / aoi_id
     summary_path = out_dir / "vlm_before_after_summary.json"
     csv_path = out_dir / "vlm_before_after_summary.csv"
+    records = sorted(records, key=lambda record: record["id"])
     classes: dict[str, int] = {}
     priorities: dict[str, int] = {}
     for record in records:
@@ -299,7 +337,31 @@ def write_summary(aoi_id: str, records: list[dict]) -> None:
             })
 
 
-def run_aoi(aoi_id: str, limit: int, workers: int) -> int:
+def regenerate_chips(aoi_id: str, features: list[dict]) -> int:
+    before_cog = LOCAL_BEFORE_COGS[aoi_id]
+    after_cog = LOCAL_AFTER_COGS[aoi_id]
+    made = 0
+    for feature in features:
+        fid = feature["properties"]["id"]
+        before_chip = chip_path(aoi_id, fid, "before_event")
+        after_chip = chip_path(aoi_id, fid, "after_event")
+        compare_chip = chip_path(aoi_id, fid, "before_after_compare")
+        before_chip.unlink(missing_ok=True)
+        after_chip.unlink(missing_ok=True)
+        compare_chip.unlink(missing_ok=True)
+        if not make_chip(before_cog, feature, before_chip):
+            print(f"{aoi_id} {fid} skipped chips-only: missing/black before reference", flush=True)
+            continue
+        if not make_chip(after_cog, feature, after_chip):
+            print(f"{aoi_id} {fid} skipped chips-only: missing/black after reference", flush=True)
+            continue
+        make_compare_chip(before_chip, after_chip, compare_chip)
+        made += 1
+        print(f"{aoi_id} {fid} regenerated before/after chips", flush=True)
+    return made
+
+
+def run_aoi(aoi_id: str, limit: int, workers: int, force: bool, chips_only: bool) -> int:
     before_cog = LOCAL_BEFORE_COGS[aoi_id]
     after_cog = LOCAL_AFTER_COGS[aoi_id]
     if not cog_exists(before_cog):
@@ -312,6 +374,13 @@ def run_aoi(aoi_id: str, limit: int, workers: int) -> int:
     features = sorted(data.get("features", []), key=priority)
     if limit:
         features = features[:limit]
+    if chips_only:
+        made = regenerate_chips(aoi_id, features)
+        if out_path.exists():
+            records = [json.loads(line) for line in out_path.read_text().splitlines() if line.strip()]
+            write_summary(aoi_id, records)
+        print(f"Regenerated {made} before/after chip triplets")
+        return 0
     done = set()
     records: list[dict] = []
     if out_path.exists():
@@ -320,12 +389,20 @@ def run_aoi(aoi_id: str, limit: int, workers: int) -> int:
               record = json.loads(line)
               done.add(record["id"])
               records.append(record)
-    pending = [feature for feature in features if feature["properties"]["id"] not in done]
+    force_ids = {feature["properties"]["id"] for feature in features} if force else set()
+    if force_ids:
+        records = [record for record in records if record["id"] not in force_ids]
+        done = {record["id"] for record in records}
+    pending = [feature for feature in features if force or feature["properties"]["id"] not in done]
     reviewed = 0
     skipped = 0
     write_lock = Lock()
-    with out_path.open("a") as dst, ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        futures = {pool.submit(make_record, aoi_id, before_cog, after_cog, feature): feature for feature in pending}
+    mode = "w" if force_ids else "a"
+    with out_path.open(mode) as dst, ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        if force_ids:
+            for record in records:
+                dst.write(json.dumps(record, ensure_ascii=True, separators=(",", ":")) + "\n")
+        futures = {pool.submit(make_record, aoi_id, before_cog, after_cog, feature, force): feature for feature in pending}
         for future in as_completed(futures):
             feature = futures[future]
             fid = feature["properties"]["id"]
@@ -354,10 +431,18 @@ def main() -> None:
     load_env(ROOT / ".env")
     load_env(ROOT.parents[1] / ".env")
     if len(sys.argv) < 2:
-        raise SystemExit("Usage: scripts/run_minimax_ems_before_after_review.py AOI_ID [AOI_ID...] [--limit N]")
+        raise SystemExit("Usage: scripts/run_minimax_ems_before_after_review.py AOI_ID [AOI_ID...] [--limit N] [--workers N] [--force] [--chips-only]")
     args = sys.argv[1:]
     limit = 0
+    force = False
+    chips_only = False
     workers = int(os.environ.get("VLM_WORKERS", "3"))
+    if "--force" in args:
+        force = True
+        args = [arg for arg in args if arg != "--force"]
+    if "--chips-only" in args:
+        chips_only = True
+        args = [arg for arg in args if arg != "--chips-only"]
     if "--workers" in args:
         index = args.index("--workers")
         workers = int(args[index + 1])
@@ -370,7 +455,7 @@ def main() -> None:
     for aoi_id in args:
         if aoi_id not in LOCAL_BEFORE_COGS:
             raise SystemExit(f"No before/after VLM configuration for {aoi_id}")
-        total += run_aoi(aoi_id, limit, workers)
+        total += run_aoi(aoi_id, limit, workers, force, chips_only)
     print(f"Reviewed {total} new before/after comparisons")
 
 

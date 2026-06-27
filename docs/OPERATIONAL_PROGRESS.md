@@ -111,6 +111,8 @@ QA evidence:
   - AOI03 Antimano has Vantor pre-event scene intersections, but no official EMS damage vector yet.
 - Implementation:
   - Generalized `scripts/run_minimax_ems_before_after_review.py` to support remote `/vsicurl/` Vantor COGs and CRS-safe chip extraction via `-projwin_srs EPSG:4326`.
+  - Added yellow/black EMS feature outline overlays to before/after chips so the VLM and human reviewer can compare the mapped feature geometry, not only the centroid reticle.
+  - Added `--force` and `--chips-only` runner modes so chips can be regenerated with better evidence overlays without re-spending VLM calls.
   - Ran VLM before/after for all 17 AOI02 official EMS features.
   - Updated `public/data/catalog.json` so AOI02 VLM layer uses `vlm_before_after_review.jsonl`.
 - Results:
@@ -126,9 +128,11 @@ QA evidence:
 - Evidence:
   - `qa/aoi02-before-after-vlm-pilot-contact-sheet.png`
   - `qa/aoi02-before-after-vlm-full-contact-sheet.png`
+  - `qa/aoi02-before-after-vlm-outlined-pilot-contact-sheet.png`
+  - `qa/aoi02-before-after-vlm-outlined-full-contact-sheet.png`
   - `qa/local-aoi02-before-after-vlm.png`
 - Result:
-  - AOI02 now has complete before/after VLM coverage, but outputs are mostly uncertainty flags. This should be treated as a successful evidence-quality finding, not as a strong damage classifier.
+  - AOI02 now has complete before/after VLM coverage, but outputs are mostly uncertainty flags. The outline overlays show why: several EMS polygons are broad or edge-aligned and the centroid/outlined geometry may include canopy, road edge, or shadow instead of a clean roof target. This should be treated as a successful evidence-quality finding, not as a strong damage classifier.
 - Next recommended action:
   - Search for better non-Vantor pre-event imagery for AOI02 or use AOI03 as an imagery-only comparison pilot only if there are credible damage candidates. Do not scale AOI02 further without improving post-event chip quality or candidate centering.
 
