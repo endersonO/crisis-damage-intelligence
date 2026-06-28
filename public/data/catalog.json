@@ -49,7 +49,13 @@
         "vlmReviewed": 17,
         "vlmBeforeAfterReviewed": 17,
         "vlmBeforeAfterSkippedNoBefore": 0,
-        "vlmBeforeAfterUncertain": 15
+        "vlmBeforeAfterUncertain": 15,
+        "vlmBeforeAfterLikelyDestroyed": 0,
+        "vlmBeforeAfterPossibleMajor": 0,
+        "vlmBeforeAfterMinor": 1,
+        "vlmBeforeAfterNoChange": 1,
+        "vlmBeforeAfterUrgentReview": 3,
+        "vlmBeforeAfterActionable": 1
       },
       "imagery": {
         "after": {
@@ -528,7 +534,14 @@
         "possibleDamage": 24,
         "vlmReviewed": 107,
         "vlmBeforeAfterReviewed": 107,
-        "vlmBeforeAfterSkippedNoBefore": 13
+        "vlmBeforeAfterSkippedNoBefore": 13,
+        "vlmBeforeAfterUncertain": 32,
+        "vlmBeforeAfterLikelyDestroyed": 26,
+        "vlmBeforeAfterPossibleMajor": 33,
+        "vlmBeforeAfterMinor": 14,
+        "vlmBeforeAfterNoChange": 2,
+        "vlmBeforeAfterUrgentReview": 33,
+        "vlmBeforeAfterActionable": 73
       },
       "imagery": {
         "after": {
@@ -600,7 +613,7 @@
       "event": "Venezuela earthquake June 2026",
       "name": {
         "en": "Catia La Mar - Microsoft AI4G Predicted Damage",
-        "es": "Catia La Mar - Da\u00f1o predicho Microsoft AI4G"
+        "es": "Catia La Mar - Daño predicho Microsoft AI4G"
       },
       "status": "external-prediction",
       "source": "HDX dataset from Microsoft AI for Good Lab: Venezuela Earthquakes: Building Damage Assessment in Catia La Mar. External predicted building-footprint damage, not official Copernicus EMS damage labels.",

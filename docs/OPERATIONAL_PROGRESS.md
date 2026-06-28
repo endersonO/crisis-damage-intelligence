@@ -231,6 +231,47 @@ QA evidence:
   - If humans can review these 8 candidates, record validation outcomes as static JSONL/CSV before considering any public display.
   - Otherwise, continue official EMS monitoring and before-baseline search for AOI06/AOI08.
 
+### 2026-06-27 - Public VLM Coverage And Uncertainty Metrics
+
+- Objective: make before/after VLM output more useful and less misleading in the public app.
+- Files changed:
+  - Added `scripts/update_catalog_vlm_metrics.py`.
+  - Updated `public/data/catalog.json` with normalized before/after VLM metrics from summary JSON.
+  - Updated `src/components/OperationsConsole.tsx` to show a bilingual VLM before/after quality panel.
+  - Updated `src/app/globals.css` with compact metric styling.
+- Commands run:
+  - `python3 scripts/update_catalog_vlm_metrics.py`
+  - `npm run lint`
+  - `npm run build`
+  - `portless vlm-quality npm start`
+- Result:
+  - AOI12 public UI now surfaces:
+    - 107 reviewed
+    - 13 skipped no-before
+    - 32 uncertain, 30%
+    - 73 visible-change signals
+    - 33 urgent review
+    - 89% usable coverage
+  - AOI02 public UI now surfaces:
+    - 17 reviewed
+    - 0 skipped no-before
+    - 15 uncertain, 88%
+    - 1 visible-change signal
+    - 3 urgent review
+    - 100% usable coverage
+  - The panel explicitly says VLM signals are triage aids only and high uncertainty means the imagery pair could not support a reliable damage call.
+- QA performed:
+  - Local production server via Portless.
+  - Browser QA confirmed Spanish panel values for La Guaira and Caracas.
+  - Browser QA confirmed English panel copy for La Guaira.
+- Evidence:
+  - `qa/local-vlm-quality-panel.png`
+  - `qa/local-vlm-quality-panel-en.png`
+- Deployment:
+  - Not deployed in this loop.
+- Next recommended action:
+  - Deploy after review, or continue with before-baseline search for AOI06/AOI08 if we want more VLM coverage before pushing another public update.
+
 ## Known Gaps
 
 1. Imagery is still active-area based. The map loads all vector features, but not all AOI imagery at once.

@@ -51,6 +51,14 @@ const copy = {
     confidenceTitle: "Data confidence",
     confidenceText:
       "Official EMS vector labels are the source of record for this AOI. MiniMax-M3 VLM results are triage aids. When before/after chips are available, the VLM compares visible change; otherwise it is lower-confidence post-event-only review.",
+    vlmQualityTitle: "VLM before/after quality",
+    vlmCoverage: "reviewed",
+    vlmSkipped: "skipped no-before",
+    vlmUncertain: "uncertain",
+    vlmActionable: "visible-change signals",
+    vlmUrgent: "urgent review",
+    vlmQualityNote:
+      "VLM signals are triage aids only. High uncertainty means the imagery pair could not support a reliable damage call.",
     statuses: {
       "test-fixture": "Readiness test",
       "official-vector": "Official EMS vector",
@@ -107,6 +115,14 @@ const copy = {
     confidenceTitle: "Confianza del dato",
     confidenceText:
       "Las etiquetas vectoriales oficiales de EMS son la fuente principal para este AOI. Los resultados MiniMax-M3 son ayudas de triage. Cuando existen chips antes/después, el VLM compara cambio visible; si no, es revisión post-evento de menor confianza.",
+    vlmQualityTitle: "Calidad VLM antes/después",
+    vlmCoverage: "revisados",
+    vlmSkipped: "sin antes",
+    vlmUncertain: "inciertos",
+    vlmActionable: "señales de cambio visible",
+    vlmUrgent: "revisión urgente",
+    vlmQualityNote:
+      "Las señales VLM son solo ayuda de triage. Alta incertidumbre significa que el par de imágenes no permite una llamada de daño confiable.",
     statuses: {
       "test-fixture": "Prueba de preparación",
       "official-vector": "Vector oficial EMS",
@@ -445,6 +461,7 @@ export default function OperationsConsole() {
           <h2>{t.confidenceTitle}</h2>
           <p>{t.confidenceText}</p>
         </section>
+        {active && <VlmQualityPanel aoi={active} language={language} />}
         <section ref={priorityRef}>
           <h2>{language === "es" ? "Prioridad" : "Priority"}</h2>
           <div className="priority-list">
@@ -482,6 +499,34 @@ function formatBytes(bytes?: number) {
   if (!bytes) return "-";
   if (bytes > 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
   return `${Math.round(bytes / 1_000_000)} MB`;
+}
+
+function VlmQualityPanel({ aoi, language }: { aoi: AoiRecord; language: Language }) {
+  const t = copy[language];
+  const metrics = aoi.metrics;
+  const reviewed = metrics.vlmBeforeAfterReviewed ?? 0;
+  const skipped = metrics.vlmBeforeAfterSkippedNoBefore ?? 0;
+  const uncertain = metrics.vlmBeforeAfterUncertain ?? 0;
+  const actionable = metrics.vlmBeforeAfterActionable ?? 0;
+  const urgent = metrics.vlmBeforeAfterUrgentReview ?? 0;
+  if (!reviewed && !skipped) return null;
+  const totalAttempted = reviewed + skipped;
+  const uncertaintyRate = reviewed ? Math.round((uncertain / reviewed) * 100) : 0;
+  const coverageRate = totalAttempted ? Math.round((reviewed / totalAttempted) * 100) : 0;
+  return (
+    <section className="vlm-quality-panel">
+      <h2>{t.vlmQualityTitle}</h2>
+      <div className="mini-metrics">
+        <div><b>{reviewed}</b><span>{t.vlmCoverage}</span></div>
+        <div><b>{skipped}</b><span>{t.vlmSkipped}</span></div>
+        <div><b>{uncertain}</b><span>{t.vlmUncertain} · {uncertaintyRate}%</span></div>
+        <div><b>{actionable}</b><span>{t.vlmActionable}</span></div>
+        <div><b>{urgent}</b><span>{t.vlmUrgent}</span></div>
+        <div><b>{coverageRate}%</b><span>{language === "es" ? "cobertura útil" : "usable coverage"}</span></div>
+      </div>
+      <p>{t.vlmQualityNote}</p>
+    </section>
+  );
 }
 
 function Evidence({ feature, vlm, language, onBackToPriority }: { feature: DamageFeature; vlm?: VlmRecord; language: Language; onBackToPriority: () => void }) {
