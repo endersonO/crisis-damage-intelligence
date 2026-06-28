@@ -146,4 +146,4 @@ Acceptance criteria:
 
 ## Current Highest-Leverage Recommendation
 
-Run the next before/after VLM expansion loop. First human-review the 5 AOI03 internal urgent candidates or find stronger high-resolution pre-event baselines for AOI06/AOI08/AOI10; only then expand VLM batches. Keep post-event-only VLM separate from before/after metrics. Move chips/tiles to R2/CDN immediately after or during that work if deployment weight blocks publishing new VLM outputs.
+Run the next before/after VLM expansion loop. Current public baseline inventory found no high-resolution building-level pre-event baseline for AOI06/AOI08/AOI10; only Sentinel-2 context imagery is available there. Therefore, first human-review the 5 AOI03 internal urgent candidates or find a new external high-resolution baseline source for AOI06/AOI08/AOI10. Keep post-event-only VLM separate from before/after metrics. Move chips/tiles to R2/CDN immediately after or during that work if deployment weight blocks publishing new VLM outputs.

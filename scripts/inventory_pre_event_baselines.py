@@ -260,6 +260,83 @@ def write_outputs(rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+    write_suitability_report(rows)
+
+
+def write_suitability_report(rows: list[dict[str, Any]]) -> None:
+    by_aoi: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_aoi.setdefault(row["aoi_id"], []).append(row)
+
+    names = {
+        "emsr884-aoi03-antimano": "AOI03 Antimano",
+        "emsr884-aoi06-moron": "AOI06 Moron",
+        "emsr884-aoi08-san-felipe": "AOI08 San Felipe",
+        "emsr884-aoi10-guacara": "AOI10 Guacara",
+    }
+    order = [aoi for aoi in TARGET_AOIS if aoi in by_aoi]
+    order.sort()
+
+    lines = [
+        "# Pre-Event Baseline Suitability Report",
+        "",
+        "Generated from `ops/baseline_inventory/pre_event_baseline_inventory.json`.",
+        "",
+        "Only imagery marked `usable_for_building_vlm=true` should be used for building-level before/after VLM. Sentinel-2 and unknown-date/context-only basemaps are not acceptable for building damage comparison.",
+        "",
+        "## Summary",
+        "",
+        "| AOI | Building-level baseline | Total candidates | Usable feature coverage | Decision |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for aoi_id in order:
+        items = by_aoi.get(aoi_id, [])
+        usable = [row for row in items if row.get("usable_for_building_vlm")]
+        covered = sum(int(row.get("features_covered") or 0) for row in usable)
+        if aoi_id == "emsr884-aoi03-antimano" and usable:
+            decision = "usable pilot only; internal candidates, not official vectors"
+        elif aoi_id in {"emsr884-aoi06-moron", "emsr884-aoi08-san-felipe"}:
+            decision = "blocked: only 10 m Sentinel-2 context baseline found"
+        elif aoi_id == "emsr884-aoi10-guacara":
+            decision = "blocked: no official damage vector and only context baseline found"
+        else:
+            decision = "blocked for before/after building VLM"
+        lines.append(f"| `{aoi_id}` | {len(usable)} | {len(items)} | {covered} | {decision} |")
+
+    lines.extend(["", "## AOI Detail", ""])
+    for aoi_id in order:
+        items = by_aoi.get(aoi_id, [])
+        usable = [row for row in items if row.get("usable_for_building_vlm")]
+        context = [row for row in items if not row.get("usable_for_building_vlm")]
+        lines.extend([f"### {names.get(aoi_id, aoi_id)}", ""])
+        if usable:
+            lines.append("Building-level candidate baselines:")
+            for row in usable:
+                lines.append(
+                    f"- {row['source']} `{row['item_id']}`; datetime {row.get('datetime')}; "
+                    f"gsd {row.get('gsd_m')} m; cloud {row.get('cloud_cover')}; "
+                    f"features covered {row.get('features_covered')}; license {row.get('license')}"
+                )
+        else:
+            lines.append("No high-resolution building-level pre-event baseline found in the current public inventory.")
+        if context:
+            lines.extend(["", "Context-only candidates found:"])
+            for row in context[:10]:
+                lines.append(
+                    f"- {row['source']} `{row['item_id']}`; datetime {row.get('datetime')}; "
+                    f"gsd {row.get('gsd_m')}; features covered {row.get('features_covered')}; "
+                    f"judgement `{row.get('judgement')}`"
+                )
+        lines.append("")
+
+    lines.extend([
+        "## Operational Rule",
+        "",
+        "- Do not run or publish before/after building VLM for AOI06, AOI08, or AOI10 until a high-resolution pre-event baseline is found.",
+        "- Post-event-only VLM may remain available as lower-confidence triage evidence, but it must stay labeled separately from before/after comparison.",
+        "- AOI03 VLM remains internal because it is based on OSM candidates, not official EMS damage features.",
+    ])
+    (OUT_DIR / "pre_event_baseline_suitability_report.md").write_text("\n".join(lines) + "\n")
 
 
 def main() -> None:

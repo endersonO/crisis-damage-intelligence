@@ -546,6 +546,26 @@ QA evidence:
 - Next recommended action:
   - Keep searching for high-resolution pre-event AOI06/AOI08 baselines or human-review the 5 urgent AOI03 adjudicated candidates; do not run post-event-only VLM as before/after evidence.
 
+### 2026-06-27 - Pre-Event Baseline Suitability Rerun
+
+- Objective: verify whether AOI06, AOI08, or AOI10 can honestly support building-level before/after VLM before running more model calls.
+- Commands run:
+  - `python3 -m py_compile scripts/inventory_pre_event_baselines.py`
+  - `python3 scripts/inventory_pre_event_baselines.py`
+- Result:
+  - AOI03: 4 Vantor Open Data building-level candidates, usable only for internal OSM-candidate pilot work.
+  - AOI06: 0 building-level candidates; 3 Sentinel-2 context-only candidates covering 129 features at 10 m GSD.
+  - AOI08: 0 building-level candidates; 3 Sentinel-2 context-only candidates covering 43 features at 10 m GSD.
+  - AOI10: 0 building-level candidates; 8 Sentinel-2 context-only candidates and no official damage vector.
+- Files changed:
+  - `scripts/inventory_pre_event_baselines.py`
+  - `ops/baseline_inventory/pre_event_baseline_inventory.json`
+  - `ops/baseline_inventory/pre_event_baseline_suitability_report.md`
+- Guardrail:
+  - Do not run or publish AOI06/AOI08/AOI10 before/after building VLM until a high-resolution pre-event baseline is found. Sentinel-2 is context-only for this use.
+- Next recommended action:
+  - Human-review the 5 AOI03 urgent candidates or continue external source search specifically for high-resolution AOI06/AOI08/AOI10 pre-event imagery.
+
 ## Known Gaps
 
 1. Imagery is still active-area based. The map loads all vector features, but not all AOI imagery at once.
