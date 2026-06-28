@@ -1,6 +1,6 @@
-# Crisis Damage Intelligence
+# Respuesta Venezuela
 
-Static-first, bilingual earthquake damage intelligence platform for public response coordination.
+Static-first, bilingual earthquake response and damage triage platform for public coordination in Venezuela.
 
 Canonical public URL: `https://respuestavenezuela.org`
 

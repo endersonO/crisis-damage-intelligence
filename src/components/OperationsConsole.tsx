@@ -7,8 +7,8 @@ import type { AoiCatalog, AoiRecord, DamageFeature, Language, VlmRecord } from "
 
 const copy = {
   en: {
-    title: "Crisis Damage Intelligence",
-    subtitle: "Static-first geospatial triage for earthquake response",
+    title: "Respuesta Venezuela",
+    subtitle: "Geospatial damage triage for earthquake response",
     live: "Public read-only",
     language: "Language",
     aoi: "Go to affected area",
@@ -84,8 +84,8 @@ const copy = {
     },
   },
   es: {
-    title: "Inteligencia de Daños en Crisis",
-    subtitle: "Triage geoespacial static-first para respuesta a terremotos",
+    title: "Respuesta Venezuela",
+    subtitle: "Triage geoespacial de daños para respuesta al terremoto",
     live: "Publico solo lectura",
     language: "Idioma",
     aoi: "Ir a zona afectada",

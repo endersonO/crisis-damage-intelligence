@@ -6,8 +6,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://respuestavenezuela.org"),
-  title: "Crisis Damage Intelligence",
-  description: "Static-first bilingual earthquake damage intelligence platform",
+  title: "Respuesta Venezuela",
+  description: "Bilingual geospatial earthquake response and damage triage platform for Venezuela",
   alternates: {
     canonical: "/",
   },
