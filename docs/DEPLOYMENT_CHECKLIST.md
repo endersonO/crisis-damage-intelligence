@@ -63,8 +63,10 @@ Required DNS records for the purchased domain:
 
 | Type | Name | Value | Proxy |
 | --- | --- | --- | --- |
-| A | `@` | `76.76.21.21` | DNS only preferred for Vercel validation |
-| A | `www` | `76.76.21.21` | DNS only preferred for Vercel validation |
+| A | `@` | `76.76.21.21` | Currently proxied through Cloudflare |
+| A | `www` | `76.76.21.21` | Currently proxied through Cloudflare |
+
+If Vercel certificate validation ever fails, switch both records to DNS-only temporarily, wait for validation, then re-enable the proxy only after smoke testing.
 
 Validation commands:
 
