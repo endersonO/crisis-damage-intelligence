@@ -1,24 +1,18 @@
 {
   "review_type": "post_event_only",
   "model": "MiniMax-M3",
-  "reviewed": 120,
+  "reviewed": 17,
   "official_ems_counts": {
-    "Destroyed": 10,
-    "Damaged": 86,
-    "Possibly damaged": 24
+    "Possibly damaged": 17
   },
   "vlm_damage_class_counts": {
-    "likely_destroyed": 12,
-    "uncertain_imagery_problem": 46,
-    "possible_major_damage": 33,
-    "minor_visible_damage": 24,
-    "no_visible_damage": 5
+    "uncertain_imagery_problem": 15,
+    "minor_visible_damage": 2
   },
   "vlm_action_priority_counts": {
-    "review": 97,
-    "urgent_review": 20,
-    "deprioritize": 3
+    "urgent_review": 3,
+    "review": 14
   },
-  "urgent_like_count": 20,
+  "urgent_like_count": 3,
   "warning": "VLM outputs are triage aids from post-event chips only; official EMS labels remain source of record; absence of visible VLM damage is not proof of no damage."
 }

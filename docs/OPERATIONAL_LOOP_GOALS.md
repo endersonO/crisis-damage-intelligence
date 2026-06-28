@@ -26,6 +26,7 @@ Acceptance criteria:
 - AOI12 before/after VLM remains the canonical VLM pattern.
 - No feature is labeled as before/after reviewed unless both images were actually used.
 - Areas with only post-event imagery are not treated as before/after VLM comparisons.
+- Catalog metrics distinguish `vlmBeforeAfter*` from lower-confidence `vlmPostEvent*`.
 - VLM outputs include evidence chips, prompt/model metadata, source imagery dates, and triage warning.
 - Run VLM first on high-value candidates, not every feature by default.
 - The app exposes VLM before/after results clearly in the evidence panel and downloads.
@@ -145,4 +146,4 @@ Acceptance criteria:
 
 ## Current Highest-Leverage Recommendation
 
-Run the next before/after VLM expansion loop. First human-review the 5 AOI03 internal urgent candidates or find stronger pre-event baselines for AOI06/AOI08/AOI10; only then expand VLM batches. Move chips/tiles to R2/CDN immediately after or during that work if deployment weight blocks publishing new VLM outputs.
+Run the next before/after VLM expansion loop. First human-review the 5 AOI03 internal urgent candidates or find stronger high-resolution pre-event baselines for AOI06/AOI08/AOI10; only then expand VLM batches. Keep post-event-only VLM separate from before/after metrics. Move chips/tiles to R2/CDN immediately after or during that work if deployment weight blocks publishing new VLM outputs.

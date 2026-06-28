@@ -18,7 +18,8 @@ const copy = {
     candidates: "candidates",
     confirmed: "official destroyed/damaged",
     possible: "official possible",
-    vlm: "VLM reviewed",
+    vlm: "VLM before/after",
+    vlmPostEvent: "VLM post-event",
     mode: "Image",
     basemap: "Base",
     mapBase: "Map",
@@ -82,7 +83,8 @@ const copy = {
     candidates: "candidatos",
     confirmed: "destruidos/dañados oficiales",
     possible: "posibles oficiales",
-    vlm: "revisados VLM",
+    vlm: "VLM antes/despues",
+    vlmPostEvent: "VLM post-evento",
     mode: "Imagen",
     basemap: "Base",
     mapBase: "Mapa",
@@ -444,7 +446,10 @@ export default function OperationsConsole() {
           <div><b>{metrics?.features ?? "-"}</b><span>{t.features}</span></div>
           <div><b>{metrics?.damagedConfirmed ?? 0}</b><span>{t.confirmed}</span></div>
           <div><b>{metrics?.candidates ?? metrics?.possibleDamage ?? 0}</b><span>{t.candidates}</span></div>
-          <div><b>{metrics?.vlmReviewed ?? 0}</b><span>{t.vlm}</span></div>
+          <div>
+            <b>{metrics?.vlmBeforeAfterReviewed ?? metrics?.vlmReviewed ?? metrics?.vlmPostEventReviewed ?? 0}</b>
+            <span>{metrics?.vlmBeforeAfterReviewed ? t.vlm : metrics?.vlmPostEventReviewed ? t.vlmPostEvent : t.vlm}</span>
+          </div>
         </section>
 
         <section className="downloads-section">

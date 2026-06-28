@@ -521,6 +521,31 @@ QA evidence:
 - Next recommended action:
   - Only the 5 `urgent_human_review` AOI03 candidates should be manually checked first. Do not expand or publish AOI03 candidates until a human review or better post-event imagery is available.
 
+### 2026-06-27 - Separate Before/After VLM From Post-Event-Only VLM
+
+- Objective: prevent the app/catalog from implying before/after comparison where only post-event VLM exists.
+- Files changed:
+  - `scripts/sync_vlm_review_metrics.py`
+  - `scripts/update_catalog_vlm_metrics.py`
+  - `public/data/catalog.json`
+  - `public/data/aoi/*/vlm_summary.json`
+  - `public/data/aoi/*/vlm_review_summary.csv`
+  - `src/components/OperationsConsole.tsx`
+- Result:
+  - Before/after VLM metrics remain under `vlmBeforeAfter*`.
+  - Post-event-only VLM metrics are now under `vlmPostEvent*`.
+  - AOI06 and AOI08 no longer expose generic `vlmReviewed` as if they had before/after review.
+  - The KPI label now says `VLM before/after` when temporal comparison exists and `VLM post-event`/`VLM post-evento` when only lower-confidence post-event review exists.
+- Current metric split:
+  - AOI02: 17 before/after reviewed; 17 post-event-only records also available.
+  - AOI06: 0 before/after reviewed; 129 post-event-only records.
+  - AOI08: 0 before/after reviewed; 43 post-event-only records.
+  - AOI12: 107 before/after reviewed; 120 post-event-only records.
+- Guardrail:
+  - AOI06/AOI08 still need credible high-resolution pre-event imagery before they can be used for building-level before/after VLM. Sentinel-2 context imagery remains too coarse for this.
+- Next recommended action:
+  - Keep searching for high-resolution pre-event AOI06/AOI08 baselines or human-review the 5 urgent AOI03 adjudicated candidates; do not run post-event-only VLM as before/after evidence.
+
 ## Known Gaps
 
 1. Imagery is still active-area based. The map loads all vector features, but not all AOI imagery at once.

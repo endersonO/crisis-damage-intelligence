@@ -33,7 +33,10 @@
         "cog": "https://rapidmapping-viewer.s3.eu-west-1.amazonaws.com/EMSR884/AOI02/GRA_PRODUCT/EMSR884_AOI02_GRA_PRODUCT_PNEO_20260625_1459_ORTHO_cog.tif",
         "vlm_before_after_jsonl": "/data/aoi/emsr884-aoi02-caracas/vlm_before_after_review.jsonl",
         "vlm_before_after_csv": "/data/aoi/emsr884-aoi02-caracas/vlm_before_after_summary.csv",
-        "vlm_before_after_summary": "/data/aoi/emsr884-aoi02-caracas/vlm_before_after_summary.json"
+        "vlm_before_after_summary": "/data/aoi/emsr884-aoi02-caracas/vlm_before_after_summary.json",
+        "vlm_jsonl": "/data/aoi/emsr884-aoi02-caracas/vlm_review.jsonl",
+        "vlm_csv": "/data/aoi/emsr884-aoi02-caracas/vlm_review_summary.csv",
+        "vlm_summary": "/data/aoi/emsr884-aoi02-caracas/vlm_summary.json"
       },
       "layers": {
         "damage": "/data/aoi/emsr884-aoi02-caracas/damage.geojson",
@@ -55,7 +58,14 @@
         "vlmBeforeAfterMinor": 1,
         "vlmBeforeAfterNoChange": 1,
         "vlmBeforeAfterUrgentReview": 3,
-        "vlmBeforeAfterActionable": 1
+        "vlmBeforeAfterActionable": 1,
+        "vlmPostEventReviewed": 17,
+        "vlmPostEventUncertain": 15,
+        "vlmPostEventLikelyDestroyed": 0,
+        "vlmPostEventPossibleMajor": 0,
+        "vlmPostEventMinor": 2,
+        "vlmPostEventNoVisibleDamage": 0,
+        "vlmPostEventUrgentReview": 3
       },
       "imagery": {
         "after": {
@@ -228,7 +238,10 @@
         "csv": "/data/aoi/emsr884-aoi06-moron/damage.csv",
         "geojson": "/data/aoi/emsr884-aoi06-moron/damage.geojson",
         "kml": "/data/aoi/emsr884-aoi06-moron/damage.kml",
-        "cog": "https://rapidmapping-viewer.s3.eu-west-1.amazonaws.com/EMSR884/AOI06/GRA_PRODUCT/EMSR884_AOI06_GRA_PRODUCT_LEGION_20260625_2036_ORTHO_cog.tif"
+        "cog": "https://rapidmapping-viewer.s3.eu-west-1.amazonaws.com/EMSR884/AOI06/GRA_PRODUCT/EMSR884_AOI06_GRA_PRODUCT_LEGION_20260625_2036_ORTHO_cog.tif",
+        "vlm_jsonl": "/data/aoi/emsr884-aoi06-moron/vlm_review.jsonl",
+        "vlm_csv": "/data/aoi/emsr884-aoi06-moron/vlm_review_summary.csv",
+        "vlm_summary": "/data/aoi/emsr884-aoi06-moron/vlm_summary.json"
       },
       "layers": {
         "damage": "/data/aoi/emsr884-aoi06-moron/damage.geojson",
@@ -241,7 +254,14 @@
         "destroyed": 2,
         "damagedConfirmed": 36,
         "possibleDamage": 93,
-        "vlmReviewed": 129
+        "vlmReviewed": 0,
+        "vlmPostEventReviewed": 129,
+        "vlmPostEventUncertain": 93,
+        "vlmPostEventLikelyDestroyed": 0,
+        "vlmPostEventPossibleMajor": 13,
+        "vlmPostEventMinor": 17,
+        "vlmPostEventNoVisibleDamage": 6,
+        "vlmPostEventUrgentReview": 21
       },
       "imagery": {
         "after": {
@@ -357,7 +377,14 @@
         "destroyed": 0,
         "damagedConfirmed": 8,
         "possibleDamage": 35,
-        "vlmReviewed": 43
+        "vlmReviewed": 0,
+        "vlmPostEventReviewed": 43,
+        "vlmPostEventUncertain": 41,
+        "vlmPostEventLikelyDestroyed": 0,
+        "vlmPostEventPossibleMajor": 2,
+        "vlmPostEventMinor": 0,
+        "vlmPostEventNoVisibleDamage": 0,
+        "vlmPostEventUrgentReview": 11
       },
       "imagery": {
         "after": {
@@ -541,7 +568,14 @@
         "vlmBeforeAfterMinor": 14,
         "vlmBeforeAfterNoChange": 2,
         "vlmBeforeAfterUrgentReview": 33,
-        "vlmBeforeAfterActionable": 73
+        "vlmBeforeAfterActionable": 73,
+        "vlmPostEventReviewed": 120,
+        "vlmPostEventUncertain": 46,
+        "vlmPostEventLikelyDestroyed": 12,
+        "vlmPostEventPossibleMajor": 33,
+        "vlmPostEventMinor": 24,
+        "vlmPostEventNoVisibleDamage": 5,
+        "vlmPostEventUrgentReview": 20
       },
       "imagery": {
         "after": {
