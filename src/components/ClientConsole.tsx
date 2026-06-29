@@ -1,10 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import BootSkeleton from "./BootSkeleton";
 
 const OperationsConsole = dynamic(() => import("./OperationsConsole"), {
   ssr: false,
-  loading: () => <main className="boot">Loading crisis map...</main>,
+  loading: () => <BootSkeleton />,
 });
 
 export default function ClientConsole() {

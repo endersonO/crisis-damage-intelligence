@@ -10,11 +10,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { trackAnalytics } from "@/lib/analytics";
 import { persistLang, readStoredLang } from "@/lib/lang";
+import { fetchAoiData, getOfflineBudgetBytes, precacheAoi } from "@/lib/offline-cache";
 import { cn } from "@/lib/utils";
 import MapPanel from "./map/MapPanel";
 import type { AoiCatalog, AoiRecord, DamageFeature, Language, VlmRecord } from "./types";
 
 const DIRECT_RASTER_MOBILE_MAX_BYTES = 250_000_000;
+
+// Run a low-priority background task without blocking interaction.
+function scheduleIdle(cb: () => void) {
+  const ric =
+    typeof window !== "undefined"
+      ? (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+      : undefined;
+  if (typeof ric === "function") ric(cb);
+  else setTimeout(cb, 1200);
+}
 
 const copy = {
   en: {
@@ -523,6 +534,8 @@ export default function OperationsConsole() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [mobileSheet, setMobileSheet] = useState<"none" | "about" | "zona" | "capas">("none");
+  const [offlineStatus, setOfflineStatus] = useState<{ done: number; total: number; ready: boolean; allReady: boolean }>({ done: 0, total: 0, ready: false, allReady: false });
+  const precachedAoisRef = useRef<Set<string>>(new Set());
   const [focusToken, setFocusToken] = useState(0);
   const [aoiFocusToken, setAoiFocusToken] = useState(0);
   const [vlm, setVlm] = useState<Record<string, VlmRecord>>({});
@@ -629,6 +642,71 @@ export default function OperationsConsole() {
   }, []);
 
   const active = useMemo<AoiRecord | undefined>(() => catalog?.aois.find((a) => a.id === activeId), [catalog, activeId]);
+
+  // Ask the browser to keep our storage persistent so the large offline image
+  // cache can't evict the app shell (HTML/CSS/JS) under storage pressure.
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {});
+  }, []);
+
+  // Automatically keep the IMPORTANT imagery (tiles + chips around official/VLM
+  // damage) available offline — no buttons, no prompts: a field responder in a
+  // hurry shouldn't have to think about it. Active zone first, then the rest in
+  // the background. Idempotent and abortable.
+  // (1) Active zone first — fast, with progress, using the in-memory data.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("caches" in window)) return;
+    if (!active || features.length === 0) return;
+    if (precachedAoisRef.current.has(active.id)) {
+      setOfflineStatus((s) => ({ ...s, ready: true }));
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    const run = async () => {
+      const budgetBytes = await getOfflineBudgetBytes();
+      await precacheAoi(active, features, vlm, {
+        signal: controller.signal,
+        budgetBytes,
+        onProgress: (p) => {
+          if (!cancelled) setOfflineStatus((s) => ({ ...s, done: p.done, total: p.total, ready: false }));
+        },
+      });
+      if (!cancelled && !controller.signal.aborted) {
+        precachedAoisRef.current.add(active.id);
+        setOfflineStatus((s) => ({ ...s, ready: true }));
+      }
+    };
+    scheduleIdle(() => { if (!cancelled) void run(); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [active, features, vlm]);
+
+  // (2) Every zone in the catalog, in the background. Keyed only on `catalog`
+  // so switching the active zone does NOT abort it — otherwise the tail never
+  // finishes and only opened zones get cached. Idempotent + persistent.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("caches" in window) || !catalog) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    const run = async () => {
+      const budgetBytes = await getOfflineBudgetBytes();
+      let budgetReached = false;
+      for (const aoi of catalog.aois) {
+        if (cancelled || controller.signal.aborted) return;
+        if (precachedAoisRef.current.has(aoi.id)) continue;
+        const { features: f, vlmMap } = await fetchAoiData(aoi, controller.signal);
+        if (cancelled) return;
+        const completed = await precacheAoi(aoi, f, vlmMap, { signal: controller.signal, budgetBytes });
+        if (!cancelled && !controller.signal.aborted) precachedAoisRef.current.add(aoi.id);
+        if (!completed) { budgetReached = true; break; } // out of safe storage — stop
+      }
+      if (!cancelled && !controller.signal.aborted && !budgetReached) {
+        setOfflineStatus((s) => ({ ...s, allReady: true }));
+      }
+    };
+    scheduleIdle(() => { if (!cancelled) void run(); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [catalog]);
 
   useEffect(() => {
     if (!catalog) return;
@@ -1025,6 +1103,16 @@ export default function OperationsConsole() {
     </div>
   );
 
+  const offlinePct = offlineStatus.total > 0 ? Math.round((offlineStatus.done / offlineStatus.total) * 100) : 0;
+  const offlineLabel = offlineStatus.allReady
+    ? (language === "es" ? "Todo guardado sin conexión ✓" : "All zones saved offline ✓")
+    : offlineStatus.ready
+      ? (language === "es" ? "Esta zona ya funciona sin conexión ✓" : "This zone works offline ✓")
+      : offlineStatus.total > 0
+        ? (language === "es" ? `Guardando para sin conexión… ${offlinePct}%` : `Saving for offline… ${offlinePct}%`)
+        : "";
+  const offlineState = offlineStatus.allReady ? "all" : offlineStatus.ready ? "ready" : "saving";
+
   return (
     <main className="ops-shell">
       <aside className="left-rail">
@@ -1046,6 +1134,9 @@ export default function OperationsConsole() {
             </Button>
           )}
         </div>
+        {!isMobileLayout && offlineLabel && (
+          <p className={`offline-line ${offlineState}`}>{offlineLabel}</p>
+        )}
 
         <label className="field-label">{t.language}</label>
         <div className="segmented" aria-label={t.language}>
@@ -1106,6 +1197,12 @@ export default function OperationsConsole() {
       </aside>
 
       <section className="map-stage">
+        {isMobileLayout && offlineLabel && (
+          <div className={`offline-chip ${offlineState}`} role="status" aria-live="polite">
+            <span className="offline-chip-dot" aria-hidden="true" />
+            {offlineLabel}
+          </div>
+        )}
         {active && (
           <MapPanel
             aoi={active}
@@ -1220,6 +1317,9 @@ export default function OperationsConsole() {
                 <div className="mobile-sheet-body">
                   <p>{t.subtitle}</p>
                   <p className="quick-start">{t.quickStart}</p>
+                  {offlineLabel && (
+                    <p className={`offline-line ${offlineState}`}>{offlineLabel}</p>
+                  )}
                   {active && (
                     <Card className="ops-card source-card" size="sm">
                       <CardHeader>

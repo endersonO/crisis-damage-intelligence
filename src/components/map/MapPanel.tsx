@@ -179,6 +179,8 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
   useEffect(() => {
     featuresRef.current = features;
     renderVectorsRef.current();
+    // Reframe once the (important) features for this AOI have loaded.
+    fitToDataRef.current();
   }, [features]);
 
   const setDebug = useCallback((visibleFeatures: DamageFeature[]) => {
@@ -306,6 +308,47 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
     renderVectorsRef.current = renderVectors;
   }, [renderVectors]);
 
+  // Frame the map on the damage data (where it matters) instead of the whole
+  // AOI bounding box, which is mostly empty sea/mountain. Falls back to the
+  // AOI bounds when there are no features.
+  const fitToDataRef = useRef<() => void>(() => {});
+  const fitToData = useCallback(() => {
+    const view = mapRef.current?.getView();
+    if (!view) return;
+    // Frame on the IMPORTANT features (official EMS or VLM-reviewed) — that's
+    // where the data is. Ignore the bulk external predictions, which spread
+    // wide and would zoom us out over empty terrain. Keep generous padding so
+    // there's enough surrounding imagery to read the context.
+    const important: number[][] = [];
+    const all: number[][] = [];
+    for (const f of featuresRef.current) {
+      if (f.properties.aoi_id !== aoi.id) continue;
+      const lat = Number(f.properties.centroid_lat);
+      const lon = Number(f.properties.centroid_lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const pt = fromLonLat([lon, lat]);
+      all.push(pt);
+      if (!f.properties.not_official_ems || vlm[f.properties.id]) important.push(pt);
+    }
+    const pts = important.length ? important : all;
+    if (pts.length) {
+      view.fit(boundingExtent(pts), { padding: [64, 64, 64, 64], duration: 0, maxZoom: 16 });
+      // The damage is a long, thin coastal strip; fitting it all in a portrait
+      // phone zooms out over empty sea. Enforce a readable floor so we start
+      // centered on the damage core at building scale (pannable for the rest).
+      if ((view.getZoom() ?? 0) < 13.5) view.setZoom(13.5);
+      return;
+    }
+    const bounds = boundingExtent([
+      fromLonLat([aoi.bounds[0][1], aoi.bounds[0][0]]),
+      fromLonLat([aoi.bounds[1][1], aoi.bounds[1][0]]),
+    ]);
+    view.fit(bounds, { padding: [60, 60, 60, 60], duration: 0, maxZoom: 15 });
+  }, [aoi.bounds, aoi.id, vlm]);
+  useEffect(() => {
+    fitToDataRef.current = fitToData;
+  }, [fitToData]);
+
   const applyLayerVisibility = useCallback((nextMode: Props["mode"], nextBasemap: Props["basemap"]) => {
     const map = mapRef.current;
     const hasBefore = hasBeforeLayer(aoi);
@@ -349,8 +392,13 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
   const attachTileErrorTracker = useCallback((source: unknown) => {
     const s = source as { on?: (event: string, listener: () => void) => void };
     if (!s?.on) return;
-    s.on("tileloaderror", () => setTileError(true));
-    s.on("imageloaderror", () => setTileError(true));
+    // Only alarm on genuine ONLINE failures. Offline, missing tiles outside the
+    // precached damage strip are expected, not an error worth flagging.
+    const onError = () => {
+      if (navigator.onLine) setTileError(true);
+    };
+    s.on("tileloaderror", onError);
+    s.on("imageloaderror", onError);
     s.on("tileloadend", () => setTileError(false));
     s.on("imageloadend", () => setTileError(false));
   }, []);
@@ -499,19 +547,13 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
       attachTileErrorTracker(afterRef.current.getSource());
     }
 
-    map.getView().fit(bounds3857, { padding: [60, 60, 60, 60], duration: 0, maxZoom: 15 });
     applyLayerVisibility(modeRef.current, basemapRef.current);
     renderVectorsRef.current();
+    fitToDataRef.current();
   }, [aoi, applyLayerVisibility, attachFirstTileTracker, attachTileErrorTracker]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const bounds3857 = boundingExtent([
-      fromLonLat([aoi.bounds[0][1], aoi.bounds[0][0]]),
-      fromLonLat([aoi.bounds[1][1], aoi.bounds[1][0]]),
-    ]);
-    map.getView().fit(bounds3857, { padding: [60, 60, 60, 60], duration: 0, maxZoom: 15 });
+    fitToDataRef.current();
   }, [aoi.bounds, aoiFocusToken]);
 
   useEffect(() => {
