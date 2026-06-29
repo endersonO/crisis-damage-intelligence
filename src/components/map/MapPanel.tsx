@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import OlMap from "ol/Map.js";
 import View from "ol/View.js";
+import Zoom from "ol/control/Zoom.js";
+import Attribution from "ol/control/Attribution.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import Feature from "ol/Feature.js";
 import Overlay from "ol/Overlay.js";
@@ -42,6 +44,7 @@ type Props = {
   opacity: number;
   filter: "all" | "severe" | "vlm";
   basemap: "map" | "aerial";
+  language: "es" | "en";
   vlm: Record<string, VlmRecord>;
   selectedId?: string;
   focusToken: number;
@@ -120,7 +123,8 @@ function hasBeforeLayer(aoi: AoiRecord) {
   return Boolean(aoi.layers.beforeTiles || canRenderBeforeImage(aoi) || aoi.imagery?.approximateReference?.urlTemplate);
 }
 
-export default function MapPanel({ aoi, features, mode, opacity, filter, basemap, vlm, selectedId, focusToken, aoiFocusToken, onMapReady, onFirstTileLoaded, onSelect }: Props) {
+export default function MapPanel({ aoi, features, mode, opacity, filter, basemap, language, vlm, selectedId, focusToken, aoiFocusToken, onMapReady, onFirstTileLoaded, onSelect }: Props) {
+  const [tileError, setTileError] = useState(false);
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<OlMap | null>(null);
@@ -340,6 +344,25 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
     }
   }, []);
 
+  // Surface tile/imagery load failures (common in the field) instead of a
+  // silent grey map. Clears itself when tiles recover.
+  const attachTileErrorTracker = useCallback((source: unknown) => {
+    const s = source as { on?: (event: string, listener: () => void) => void };
+    if (!s?.on) return;
+    s.on("tileloaderror", () => setTileError(true));
+    s.on("imageloaderror", () => setTileError(true));
+    s.on("tileloadend", () => setTileError(false));
+    s.on("imageloadend", () => setTileError(false));
+  }, []);
+
+  const retryTiles = useCallback(() => {
+    setTileError(false);
+    mapRef.current?.getLayers().forEach((layer) => {
+      const src = (layer as { getSource?: () => { refresh?: () => void } }).getSource?.();
+      src?.refresh?.();
+    });
+  }, []);
+
   useEffect(() => {
     if (!nodeRef.current || mapRef.current) return;
     const base = new TileLayer({ source: new OSM(), visible: basemapRef.current === "map", zIndex: 0 });
@@ -365,7 +388,9 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
       layers: [base, aerialBase, vector, highlight, marker],
       overlays: [popup],
       view: new View({ center: fromLonLat([aoi.center[1], aoi.center[0]]), zoom: 12 }),
-      controls: [],
+      // Zoom buttons (top-right, away from the toolbar) for touch users who
+      // can't pinch easily; collapsible attribution for imagery licensing.
+      controls: [new Zoom({ className: "ol-zoom map-zoom" }), new Attribution({ collapsible: true })],
     });
     baseRef.current = base;
     aerialBaseRef.current = aerialBase;
@@ -376,10 +401,13 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
     mapRef.current = map;
     attachFirstTileTracker(base.getSource(), "base_map");
     attachFirstTileTracker(aerialBase.getSource(), "base_aerial");
+    attachTileErrorTracker(base.getSource());
+    attachTileErrorTracker(aerialBase.getSource());
 
     map.on("singleclick", (event) => {
       const hit = map.forEachFeatureAtPixel(event.pixel, (feature) => feature as OlDamageFeature, {
         layerFilter: (layer) => layer === vectorRef.current,
+        hitTolerance: 10,
       });
       if (hit?.original) onSelectRef.current(hit.original);
       else onSelectRef.current(null);
@@ -392,7 +420,7 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
       map.setTarget(undefined);
       mapRef.current = null;
     };
-  }, [aoi.center, attachFirstTileTracker]);
+  }, [aoi.center, attachFirstTileTracker, attachTileErrorTracker]);
 
   useEffect(() => {
     applyLayerVisibility(modeRef.current, basemap);
@@ -402,6 +430,7 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    setTileError(false); // new AOI / layer set starts clean
     if (beforeRef.current) map.removeLayer(beforeRef.current);
     if (afterRef.current) map.removeLayer(afterRef.current);
     beforeRef.current = null;
@@ -448,6 +477,7 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
         });
       map.addLayer(beforeRef.current);
       attachFirstTileTracker(beforeRef.current.getSource(), "before");
+      attachTileErrorTracker(beforeRef.current.getSource());
     }
     if (aoi.layers.afterTiles || afterImageUrl) {
       afterRef.current = aoi.layers.afterTiles
@@ -466,12 +496,13 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
         });
       map.addLayer(afterRef.current);
       attachFirstTileTracker(afterRef.current.getSource(), "after");
+      attachTileErrorTracker(afterRef.current.getSource());
     }
 
     map.getView().fit(bounds3857, { padding: [60, 60, 60, 60], duration: 0, maxZoom: 15 });
     applyLayerVisibility(modeRef.current, basemapRef.current);
     renderVectorsRef.current();
-  }, [aoi, applyLayerVisibility, attachFirstTileTracker]);
+  }, [aoi, applyLayerVisibility, attachFirstTileTracker, attachTileErrorTracker]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -497,17 +528,31 @@ export default function MapPanel({ aoi, features, mode, opacity, filter, basemap
   }, [focusFeature, focusToken, selectedId]);
 
   return (
-    <div
-      ref={nodeRef}
-      className="map-node"
-      role="region"
-      aria-label={`Mapa operacional de ${aoi.name.es}`}
-      data-filter={filter}
-      data-mode={mode}
-      data-basemap={basemap}
-      data-opacity={opacity}
-      data-selected-id={selectedId ?? ""}
-    />
+    <>
+      <div
+        ref={nodeRef}
+        className="map-node"
+        role="region"
+        aria-label={`${language === "es" ? "Mapa operacional de" : "Operational map of"} ${aoi.name[language]}`}
+        data-filter={filter}
+        data-mode={mode}
+        data-basemap={basemap}
+        data-opacity={opacity}
+        data-selected-id={selectedId ?? ""}
+      />
+      {tileError ? (
+        <div className="map-tile-error" role="status">
+          <span>
+            {language === "es"
+              ? "No se pudo cargar la imagen del mapa."
+              : "Map imagery failed to load."}
+          </span>
+          <button type="button" onClick={retryTiles}>
+            {language === "es" ? "Reintentar" : "Retry"}
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 

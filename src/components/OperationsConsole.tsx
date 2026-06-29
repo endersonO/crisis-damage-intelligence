@@ -1005,6 +1005,7 @@ export default function OperationsConsole() {
             opacity={opacity / 100}
             filter={filter}
             basemap={basemap}
+            language={language}
             vlm={vlm}
             selectedId={selected?.properties.id}
             focusToken={focusToken}

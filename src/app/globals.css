@@ -119,6 +119,30 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 h2 { margin: 0 0 10px; font-size: 15px; }
 .map-stage { position: relative; min-width: 0; }
 .map-node { position: absolute; inset: 0; background: #c9c3b7; }
+.ol-control.map-zoom { top: 12px; right: 12px; left: auto; bottom: auto; }
+.ol-control.map-zoom button {
+  width: 40px; height: 40px; font-size: 22px; line-height: 40px; margin: 1px 0;
+  background: rgba(255, 253, 248, 0.94); color: var(--ink); border: 1px solid var(--line);
+}
+.ol-control.map-zoom button:hover, .ol-control.map-zoom button:focus-visible {
+  background: #fff;
+}
+.map-tile-error {
+  position: absolute; z-index: 900; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px; align-items: center; max-width: calc(100% - 24px);
+  padding: 8px 10px 8px 12px; border: 1px solid #d8a96a; border-radius: 8px;
+  background: #fff8df; color: #5b3d00; font-size: 13px; line-height: 1.3;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+.map-tile-error button {
+  flex: 0 0 auto; min-height: 34px; padding: 6px 11px; cursor: pointer;
+  border: 1px solid var(--black); border-radius: 7px; background: var(--black);
+  color: var(--primary-foreground); font-weight: 800;
+}
+@media (max-width: 760px) {
+  /* clear the collapsed toolbar (top-left) and zoom buttons (top-right) */
+  .map-tile-error { top: 100px; left: 8px; right: 8px; transform: none; max-width: none; }
+}
 .ol-viewport { font-family: inherit; }
 .ol-popup {
   position: absolute;
