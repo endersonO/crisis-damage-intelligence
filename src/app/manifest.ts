@@ -11,7 +11,9 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    orientation: "any",
+    // No `orientation` on purpose: "any" makes the installed PWA rotate even
+    // when the OS rotation lock is on. Omitting it makes the app respect the
+    // device's auto-rotate setting (and still allow landscape on tablets).
     background_color: "#e7e2d8",
     theme_color: "#11120f",
     lang: "es",
