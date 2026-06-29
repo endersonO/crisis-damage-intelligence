@@ -9,11 +9,23 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { trackAnalytics } from "@/lib/analytics";
+import { persistLang, readStoredLang } from "@/lib/lang";
+import { fetchAoiData, getOfflineBudgetBytes, precacheAoi } from "@/lib/offline-cache";
 import { cn } from "@/lib/utils";
 import MapPanel from "./map/MapPanel";
 import type { AoiCatalog, AoiRecord, DamageFeature, Language, VlmRecord } from "./types";
 
 const DIRECT_RASTER_MOBILE_MAX_BYTES = 250_000_000;
+
+// Run a low-priority background task without blocking interaction.
+function scheduleIdle(cb: () => void) {
+  const ric =
+    typeof window !== "undefined"
+      ? (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+      : undefined;
+  if (typeof ric === "function") ric(cb);
+  else setTimeout(cb, 1200);
+}
 
 const copy = {
   en: {
@@ -511,7 +523,7 @@ export default function OperationsConsole() {
   const [catalogStatus, setCatalogStatus] = useState<LoadStatus>("loading");
   const [aoiLayerState, setAoiLayerState] = useState<Record<string, AoiLayerState>>({});
   const [activeId, setActiveId] = useState("emsr884-aoi12-caraballeda");
-  const [language, setLanguage] = useState<Language>("es");
+  const [language, setLanguage] = useState<Language>(readStoredLang);
   const [filter, setFilter] = useState<Filter>("all");
   const [mode, setMode] = useState<Mode>("after");
   const [basemap, setBasemap] = useState<Basemap>("aerial");
@@ -521,6 +533,9 @@ export default function OperationsConsole() {
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [mobileSheet, setMobileSheet] = useState<"none" | "about" | "zona" | "capas">("none");
+  const [offlineStatus, setOfflineStatus] = useState<{ done: number; total: number; ready: boolean; allReady: boolean }>({ done: 0, total: 0, ready: false, allReady: false });
+  const precachedAoisRef = useRef<Set<string>>(new Set());
   const [focusToken, setFocusToken] = useState(0);
   const [aoiFocusToken, setAoiFocusToken] = useState(0);
   const [vlm, setVlm] = useState<Record<string, VlmRecord>>({});
@@ -531,6 +546,7 @@ export default function OperationsConsole() {
   const appLoadTrackedRef = useRef(false);
   const sessionStartedAtRef = useRef<number>(0);
   const firstInteractionTrackedRef = useRef(false);
+  const returnFocusRef = useRef(false);
   const loadedDamageAoisRef = useRef<Set<string>>(new Set());
   const loadedVlmAoisRef = useRef<Set<string>>(new Set());
   const mapReadyTrackedRef = useRef<Set<string>>(new Set());
@@ -566,6 +582,47 @@ export default function OperationsConsole() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  // Manage focus for the non-modal mobile evidence sheet (vaul modal={false}
+  // doesn't trap focus): move focus in on open, return it to the trigger on
+  // close, and allow Escape to close.
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    if (inspectorOpen) {
+      const raf = requestAnimationFrame(() => {
+        (document.querySelector('[data-testid="mobile-inspector-close"]') as HTMLElement | null)?.focus();
+      });
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setInspectorOpen(false);
+      };
+      window.addEventListener("keydown", onKey);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("keydown", onKey);
+      };
+    }
+    if (returnFocusRef.current) {
+      returnFocusRef.current = false;
+      const raf = requestAnimationFrame(() => {
+        (document.querySelector('[data-testid="mobile-inspector-toggle"]') as HTMLElement | null)?.focus();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [inspectorOpen, isMobileLayout]);
+
+  // Allow Escape to close the mobile dock sheets (zona / capas / about).
+  useEffect(() => {
+    if (mobileSheet === "none") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileSheet("none");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileSheet]);
+
+  useEffect(() => {
     fetch("/data/catalog.json")
       .then((r) => {
         if (!r.ok) throw new Error("Unable to load AOI catalog");
@@ -585,6 +642,71 @@ export default function OperationsConsole() {
   }, []);
 
   const active = useMemo<AoiRecord | undefined>(() => catalog?.aois.find((a) => a.id === activeId), [catalog, activeId]);
+
+  // Ask the browser to keep our storage persistent so the large offline image
+  // cache can't evict the app shell (HTML/CSS/JS) under storage pressure.
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {});
+  }, []);
+
+  // Automatically keep the IMPORTANT imagery (tiles + chips around official/VLM
+  // damage) available offline — no buttons, no prompts: a field responder in a
+  // hurry shouldn't have to think about it. Active zone first, then the rest in
+  // the background. Idempotent and abortable.
+  // (1) Active zone first — fast, with progress, using the in-memory data.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("caches" in window)) return;
+    if (!active || features.length === 0) return;
+    if (precachedAoisRef.current.has(active.id)) {
+      setOfflineStatus((s) => ({ ...s, ready: true }));
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    const run = async () => {
+      const budgetBytes = await getOfflineBudgetBytes();
+      await precacheAoi(active, features, vlm, {
+        signal: controller.signal,
+        budgetBytes,
+        onProgress: (p) => {
+          if (!cancelled) setOfflineStatus((s) => ({ ...s, done: p.done, total: p.total, ready: false }));
+        },
+      });
+      if (!cancelled && !controller.signal.aborted) {
+        precachedAoisRef.current.add(active.id);
+        setOfflineStatus((s) => ({ ...s, ready: true }));
+      }
+    };
+    scheduleIdle(() => { if (!cancelled) void run(); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [active, features, vlm]);
+
+  // (2) Every zone in the catalog, in the background. Keyed only on `catalog`
+  // so switching the active zone does NOT abort it — otherwise the tail never
+  // finishes and only opened zones get cached. Idempotent + persistent.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("caches" in window) || !catalog) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    const run = async () => {
+      const budgetBytes = await getOfflineBudgetBytes();
+      let budgetReached = false;
+      for (const aoi of catalog.aois) {
+        if (cancelled || controller.signal.aborted) return;
+        if (precachedAoisRef.current.has(aoi.id)) continue;
+        const { features: f, vlmMap } = await fetchAoiData(aoi, controller.signal);
+        if (cancelled) return;
+        const completed = await precacheAoi(aoi, f, vlmMap, { signal: controller.signal, budgetBytes });
+        if (!cancelled && !controller.signal.aborted) precachedAoisRef.current.add(aoi.id);
+        if (!completed) { budgetReached = true; break; } // out of safe storage — stop
+      }
+      if (!cancelled && !controller.signal.aborted && !budgetReached) {
+        setOfflineStatus((s) => ({ ...s, allReady: true }));
+      }
+    };
+    scheduleIdle(() => { if (!cancelled) void run(); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [catalog]);
 
   useEffect(() => {
     if (!catalog) return;
@@ -729,6 +851,7 @@ export default function OperationsConsole() {
       });
     }
     setLanguage(nextLanguage);
+    persistLang(nextLanguage);
   };
   const selectAoi = (id: string, cityId?: string) => {
     trackFirstInteraction("aoi");
@@ -752,6 +875,7 @@ export default function OperationsConsole() {
     setSelected(null);
     setMapControlsOpen(false);
     setInspectorOpen(false);
+    setMobileSheet("none");
     setFocusToken((value) => value + 1);
     setAoiFocusToken((value) => value + 1);
   };
@@ -828,6 +952,64 @@ export default function OperationsConsole() {
     ? String(selected.properties.source_feature_id ?? selected.properties.id)
     : prioritySummary;
   const priorityTitle = language === "es" ? "Prioridad" : "Priority";
+  const activeCity = cityNavItems.find((item) => item.sourceIds.includes(activeId));
+
+  // Affected-area list — shared by the desktop rail and the mobile "Zona" sheet.
+  const aoiListNode = (
+    <div className="aoi-list">
+      {cityNavItems.map((item) => (
+        <Button key={item.id} variant="outline" data-testid={`city-${item.id}`} aria-pressed={item.sourceIds.includes(activeId)} className={item.sourceIds.includes(activeId) ? "aoi-card active" : "aoi-card"} onClick={() => selectAoi(item.primaryAoiId, item.id)}>
+          <span>{item.name[language]}</span>
+          <small>{cityImpactLabel(item, language)}</small>
+        </Button>
+      ))}
+    </div>
+  );
+
+  // Map controls — shared by the desktop floating toolbar and the mobile "Capas" sheet.
+  const controlsBodyNode = (
+    <>
+      <div className="control-group">
+        <span>{t.basemap}</span>
+        <div className="button-row">
+          <Button variant={basemap === "map" ? "default" : "outline"} data-testid="basemap-map" aria-pressed={basemap === "map"} className={basemap === "map" ? "active" : ""} onClick={() => changeBasemap("map")}>{t.mapBase}</Button>
+          <Button variant={basemap === "aerial" ? "default" : "outline"} data-testid="basemap-aerial" aria-pressed={basemap === "aerial"} className={basemap === "aerial" ? "active" : ""} onClick={() => changeBasemap("aerial")}>{t.aerialBase}</Button>
+        </div>
+      </div>
+      <div className="control-group">
+        <span>{t.mode}</span>
+        <div className="button-row">
+          <Button variant={mode === "before" ? "default" : "outline"} data-testid="mode-before" disabled={!hasBeforeImagery} aria-pressed={mode === "before"} className={mode === "before" ? "active" : ""} onClick={() => changeMode("before")}>{t.before}</Button>
+          <Button variant={mode === "after" ? "default" : "outline"} data-testid="mode-after" disabled={!hasAfterImagery} aria-pressed={mode === "after"} className={mode === "after" ? "active" : ""} onClick={() => changeMode("after")}>{t.after}</Button>
+        </div>
+      </div>
+      <label className="range-control">
+        <span>{t.opacity} <b>{opacity}%</b></span>
+        <div className="range-row">
+          <Button type="button" variant="outline" aria-label={language === "es" ? "bajar opacidad de daño" : "reduce damage opacity"} onClick={() => adjustOpacity(-10)}>-</Button>
+          <input type="range" min="5" max="90" value={opacity} aria-label={t.opacity} onInput={(e) => setOpacity(Number(e.currentTarget.value))} onChange={(e) => setOpacity(Number(e.currentTarget.value))} />
+          <Button type="button" variant="outline" aria-label={language === "es" ? "subir opacidad de daño" : "increase damage opacity"} onClick={() => adjustOpacity(10)}>+</Button>
+        </div>
+      </label>
+      <div className="control-group">
+        <span>{t.filters}</span>
+        <div className="button-row">
+          <Button variant={filter === "all" ? "default" : "outline"} data-testid="filter-all" aria-pressed={filter === "all"} className={filter === "all" ? "active" : ""} onClick={() => changeFilter("all")}>{t.all}</Button>
+          <Button variant={filter === "severe" ? "default" : "outline"} data-testid="filter-severe" aria-pressed={filter === "severe"} className={filter === "severe" ? "active" : ""} onClick={() => changeFilter("severe")}>{t.severe}</Button>
+          <Button variant={filter === "vlm" ? "default" : "outline"} data-testid="filter-vlm" aria-pressed={filter === "vlm"} className={filter === "vlm" ? "active" : ""} onClick={() => changeFilter("vlm")}>{t.vlmOnly}</Button>
+        </div>
+      </div>
+      <details className="map-toolbar-notes">
+        <summary>{language === "es" ? "Notas" : "Notes"}</summary>
+        <p>{t.aerialBaseNote}</p>
+        {!hasImagery && <p>{t.noImagery}</p>}
+        {hasApproximateBefore && !hasNativeBeforeImagery && <p>{t.approximateBefore}</p>}
+        {hasAfterImagery && !hasBeforeImagery && <p>{active?.imagery?.before ? t.beforeEvidenceOnly : t.noBefore}</p>}
+        <p>{t.filterNote}</p>
+      </details>
+    </>
+  );
+
   const renderInspectorBody = (bodyId: string, prioritySectionRef: RefObject<HTMLElement | null>) => (
     <div className="inspector-body" id={bodyId}>
       {active && !selected && (
@@ -921,6 +1103,16 @@ export default function OperationsConsole() {
     </div>
   );
 
+  const offlinePct = offlineStatus.total > 0 ? Math.round((offlineStatus.done / offlineStatus.total) * 100) : 0;
+  const offlineLabel = offlineStatus.allReady
+    ? (language === "es" ? "Todo guardado sin conexión ✓" : "All zones saved offline ✓")
+    : offlineStatus.ready
+      ? (language === "es" ? "Esta zona ya funciona sin conexión ✓" : "This zone works offline ✓")
+      : offlineStatus.total > 0
+        ? (language === "es" ? `Guardando para sin conexión… ${offlinePct}%` : `Saving for offline… ${offlinePct}%`)
+        : "";
+  const offlineState = offlineStatus.allReady ? "all" : offlineStatus.ready ? "ready" : "saving";
+
   return (
     <main className="ops-shell">
       <aside className="left-rail">
@@ -929,7 +1121,22 @@ export default function OperationsConsole() {
           <h1>{t.title}</h1>
           <p>{t.subtitle}</p>
           <p className="quick-start">{t.quickStart}</p>
+          {isMobileLayout && (
+            <Button
+              type="button"
+              variant="outline"
+              className="brand-info"
+              data-testid="mobile-about-toggle"
+              aria-label={language === "es" ? "Información" : "Info"}
+              onClick={() => { setInspectorOpen(false); setMobileSheet("about"); }}
+            >
+              ⓘ
+            </Button>
+          )}
         </div>
+        {!isMobileLayout && offlineLabel && (
+          <p className={`offline-line ${offlineState}`}>{offlineLabel}</p>
+        )}
 
         <label className="field-label">{t.language}</label>
         <div className="segmented" aria-label={t.language}>
@@ -937,16 +1144,13 @@ export default function OperationsConsole() {
           <Button variant={language === "en" ? "default" : "outline"} className={language === "en" ? "active" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</Button>
         </div>
 
-        <label className="field-label">{t.aoi}</label>
-        <div className="aoi-list">
-          {cityNavItems.map((item) => (
-            <Button key={item.id} variant="outline" data-testid={`city-${item.id}`} aria-pressed={item.sourceIds.includes(activeId)} className={item.sourceIds.includes(activeId) ? "aoi-card active" : "aoi-card"} onClick={() => selectAoi(item.primaryAoiId, item.id)}>
-              <span>{item.name[language]}</span>
-              <small>{cityImpactLabel(item, language)}</small>
-            </Button>
-          ))}
-        </div>
-        <p className="muted">{t.rankingNote}</p>
+        {!isMobileLayout && (
+          <>
+            <label className="field-label">{t.aoi}</label>
+            {aoiListNode}
+            <p className="muted">{t.rankingNote}</p>
+          </>
+        )}
 
         {active && (
           <Card className="ops-card source-card" size="sm">
@@ -984,13 +1188,21 @@ export default function OperationsConsole() {
           </div>
         </section>
 
-        <section className="downloads-section">
-          <h2>{t.downloads}</h2>
-          <DownloadGroups downloads={active?.downloads} language={language} aoiId={active?.id} surface="downloads_panel" />
-        </section>
+        {!isMobileLayout && (
+          <section className="downloads-section">
+            <h2>{t.downloads}</h2>
+            <DownloadGroups downloads={active?.downloads} language={language} aoiId={active?.id} surface="downloads_panel" />
+          </section>
+        )}
       </aside>
 
       <section className="map-stage">
+        {isMobileLayout && offlineLabel && (
+          <div className={`offline-chip ${offlineState}`} role="status" aria-live="polite">
+            <span className="offline-chip-dot" aria-hidden="true" />
+            {offlineLabel}
+          </div>
+        )}
         {active && (
           <MapPanel
             aoi={active}
@@ -999,6 +1211,7 @@ export default function OperationsConsole() {
             opacity={opacity / 100}
             filter={filter}
             basemap={basemap}
+            language={language}
             vlm={vlm}
             selectedId={selected?.properties.id}
             focusToken={focusToken}
@@ -1023,61 +1236,26 @@ export default function OperationsConsole() {
             }}
           />
         )}
-        <div className={mapControlsOpen ? "map-toolbar open" : "map-toolbar"} data-testid="map-toolbar">
-          <Button
-            type="button"
-            variant="outline"
-            className="map-toolbar-toggle"
-            data-testid="map-controls-toggle"
-            aria-expanded={mapControlsOpen}
-            aria-controls="map-toolbar-body"
-            onClick={() => setMapControlsOpen((open) => !open)}
-          >
-            <span>{t.controls}</span>
-            <em>{mapControlsOpen ? (language === "es" ? "Cerrar" : "Close") : (language === "es" ? "Abrir" : "Open")}</em>
-            <b>{controlSummary}</b>
-          </Button>
-          <div className="map-toolbar-body" id="map-toolbar-body">
-            <div className="control-group">
-              <span>{t.basemap}</span>
-              <div className="button-row">
-                <Button variant={basemap === "map" ? "default" : "outline"} data-testid="basemap-map" aria-pressed={basemap === "map"} className={basemap === "map" ? "active" : ""} onClick={() => changeBasemap("map")}>{t.mapBase}</Button>
-                <Button variant={basemap === "aerial" ? "default" : "outline"} data-testid="basemap-aerial" aria-pressed={basemap === "aerial"} className={basemap === "aerial" ? "active" : ""} onClick={() => changeBasemap("aerial")}>{t.aerialBase}</Button>
-              </div>
+        {!isMobileLayout && (
+          <div className={`map-toolbar${mapControlsOpen ? " open" : ""}${inspectorOpen ? " inspecting" : ""}`} data-testid="map-toolbar">
+            <Button
+              type="button"
+              variant="outline"
+              className="map-toolbar-toggle"
+              data-testid="map-controls-toggle"
+              aria-expanded={mapControlsOpen}
+              aria-controls="map-toolbar-body"
+              onClick={() => setMapControlsOpen((open) => !open)}
+            >
+              <span>{t.controls}</span>
+              <em>{mapControlsOpen ? (language === "es" ? "Cerrar" : "Close") : (language === "es" ? "Abrir" : "Open")}</em>
+              <b>{controlSummary}</b>
+            </Button>
+            <div className="map-toolbar-body" id="map-toolbar-body">
+              {controlsBodyNode}
             </div>
-            <div className="control-group">
-              <span>{t.mode}</span>
-              <div className="button-row">
-                <Button variant={mode === "before" ? "default" : "outline"} data-testid="mode-before" disabled={!hasBeforeImagery} aria-pressed={mode === "before"} className={mode === "before" ? "active" : ""} onClick={() => changeMode("before")}>{t.before}</Button>
-                <Button variant={mode === "after" ? "default" : "outline"} data-testid="mode-after" disabled={!hasAfterImagery} aria-pressed={mode === "after"} className={mode === "after" ? "active" : ""} onClick={() => changeMode("after")}>{t.after}</Button>
-              </div>
-            </div>
-            <label className="range-control">
-              <span>{t.opacity} <b>{opacity}%</b></span>
-              <div className="range-row">
-                <Button type="button" variant="outline" aria-label={language === "es" ? "bajar opacidad de daño" : "reduce damage opacity"} onClick={() => adjustOpacity(-10)}>-</Button>
-                <input type="range" min="5" max="90" value={opacity} aria-label={t.opacity} onInput={(e) => setOpacity(Number(e.currentTarget.value))} onChange={(e) => setOpacity(Number(e.currentTarget.value))} />
-                <Button type="button" variant="outline" aria-label={language === "es" ? "subir opacidad de daño" : "increase damage opacity"} onClick={() => adjustOpacity(10)}>+</Button>
-              </div>
-            </label>
-            <div className="control-group">
-              <span>{t.filters}</span>
-              <div className="button-row">
-                <Button variant={filter === "all" ? "default" : "outline"} data-testid="filter-all" aria-pressed={filter === "all"} className={filter === "all" ? "active" : ""} onClick={() => changeFilter("all")}>{t.all}</Button>
-                <Button variant={filter === "severe" ? "default" : "outline"} data-testid="filter-severe" aria-pressed={filter === "severe"} className={filter === "severe" ? "active" : ""} onClick={() => changeFilter("severe")}>{t.severe}</Button>
-                <Button variant={filter === "vlm" ? "default" : "outline"} data-testid="filter-vlm" aria-pressed={filter === "vlm"} className={filter === "vlm" ? "active" : ""} onClick={() => changeFilter("vlm")}>{t.vlmOnly}</Button>
-              </div>
-            </div>
-            <details className="map-toolbar-notes">
-              <summary>{language === "es" ? "Notas" : "Notes"}</summary>
-              <p>{t.aerialBaseNote}</p>
-              {!hasImagery && <p>{t.noImagery}</p>}
-              {hasApproximateBefore && !hasNativeBeforeImagery && <p>{t.approximateBefore}</p>}
-              {hasAfterImagery && !hasBeforeImagery && <p>{active?.imagery?.before ? t.beforeEvidenceOnly : t.noBefore}</p>}
-              <p>{t.filterNote}</p>
-            </details>
           </div>
-        </div>
+        )}
       </section>
 
       {!isMobileLayout && (
@@ -1087,22 +1265,129 @@ export default function OperationsConsole() {
       )}
 
       {isMobileLayout && (
-        <div className={inspectorOpen ? "mobile-sheet-shell open" : "mobile-sheet-shell"} data-testid="right-rail">
-          {!inspectorOpen && (
+        <>
+          <div className="mobile-dock" data-testid="right-rail">
             <Button
               type="button"
               variant="outline"
-              className="mobile-sheet-trigger"
+              className="mobile-dock-btn"
+              data-testid="mobile-zona-toggle"
+              onClick={() => { setInspectorOpen(false); setMobileSheet("zona"); }}
+            >
+              <span>{language === "es" ? "Zona" : "Zone"}</span>
+              <b>{activeCity?.name[language] ?? "—"}</b>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="mobile-dock-btn"
+              data-testid="mobile-capas-toggle"
+              onClick={() => { setInspectorOpen(false); setMobileSheet("capas"); }}
+            >
+              <span>{language === "es" ? "Capas" : "Layers"}</span>
+              <b>{controlSummary}</b>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="mobile-dock-btn mobile-dock-btn-wide"
               data-testid="mobile-inspector-toggle"
               aria-expanded={inspectorOpen}
               aria-controls="mobile-inspector-body"
-              onClick={() => setInspectorOpen(true)}
+              onClick={() => { setMobileSheet("none"); returnFocusRef.current = true; setInspectorOpen(true); }}
             >
               <span>{t.evidence} / {priorityTitle}</span>
-              <em>{language === "es" ? "Abrir" : "Open"}</em>
               <b>{selectedSummary}</b>
             </Button>
-          )}
+          </div>
+
+          <Drawer open={mobileSheet === "about"} onOpenChange={(open) => setMobileSheet(open ? "about" : "none")} direction="bottom" modal={false}>
+            <DrawerContent className="mobile-sheet-container shadcn-mobile-drawer" data-testid="mobile-about-sheet" aria-label={language === "es" ? "Acerca" : "About"}>
+              <DrawerHeader className="mobile-sheet-header">
+                <div className="mobile-sheet-handle" aria-hidden="true" />
+                <div className="mobile-sheet-titlebar">
+                  <div>
+                    <DrawerTitle>{language === "es" ? "Acerca" : "About"}</DrawerTitle>
+                    <DrawerDescription>{t.title}</DrawerDescription>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setMobileSheet("none")}>{language === "es" ? "Cerrar" : "Close"}</Button>
+                </div>
+              </DrawerHeader>
+              <ScrollArea className="mobile-sheet-content mobile-sheet-scroller">
+                <div className="mobile-sheet-body">
+                  <p>{t.subtitle}</p>
+                  <p className="quick-start">{t.quickStart}</p>
+                  {offlineLabel && (
+                    <p className={`offline-line ${offlineState}`}>{offlineLabel}</p>
+                  )}
+                  {active && (
+                    <Card className="ops-card source-card" size="sm">
+                      <CardHeader>
+                        <CardTitle>{t.source}</CardTitle>
+                        <CardAction>
+                          <Badge variant={(isDemo || isExternalPrediction) ? "secondary" : "default"}>
+                            {isDemo ? t.demoOnly : isExternalPrediction ? t.externalPrediction : t.officialData}
+                          </Badge>
+                        </CardAction>
+                      </CardHeader>
+                      <CardContent>
+                        <p>{active.source}</p>
+                        <Separator className="my-2" />
+                        <div className="meta-row"><span>{t.status}</span><b>{statusLabel(active.status)}</b></div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  <p className="muted">{t.rankingNote}</p>
+                  <section className="downloads-section">
+                    <h2>{t.downloads}</h2>
+                    <DownloadGroups downloads={active?.downloads} language={language} aoiId={active?.id} surface="downloads_panel" />
+                  </section>
+                </div>
+              </ScrollArea>
+            </DrawerContent>
+          </Drawer>
+
+          <Drawer open={mobileSheet === "zona"} onOpenChange={(open) => setMobileSheet(open ? "zona" : "none")} direction="bottom" modal={false}>
+            <DrawerContent className="mobile-sheet-container shadcn-mobile-drawer" data-testid="mobile-zona-sheet" aria-label={language === "es" ? "Ir a zona afectada" : "Go to affected area"}>
+              <DrawerHeader className="mobile-sheet-header">
+                <div className="mobile-sheet-handle" aria-hidden="true" />
+                <div className="mobile-sheet-titlebar">
+                  <div>
+                    <DrawerTitle>{language === "es" ? "Ir a zona afectada" : "Go to affected area"}</DrawerTitle>
+                    <DrawerDescription>{activeCity?.name[language] ?? ""}</DrawerDescription>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setMobileSheet("none")}>{language === "es" ? "Cerrar" : "Close"}</Button>
+                </div>
+              </DrawerHeader>
+              <ScrollArea className="mobile-sheet-content mobile-sheet-scroller">
+                <div className="mobile-sheet-body mobile-zona-list">
+                  {aoiListNode}
+                  <p className="muted">{t.rankingNote}</p>
+                </div>
+              </ScrollArea>
+            </DrawerContent>
+          </Drawer>
+
+          <Drawer open={mobileSheet === "capas"} onOpenChange={(open) => setMobileSheet(open ? "capas" : "none")} direction="bottom" modal={false}>
+            <DrawerContent className="mobile-sheet-container shadcn-mobile-drawer" data-testid="mobile-capas-sheet" aria-label={t.controls}>
+              <DrawerHeader className="mobile-sheet-header">
+                <div className="mobile-sheet-handle" aria-hidden="true" />
+                <div className="mobile-sheet-titlebar">
+                  <div>
+                    <DrawerTitle>{t.controls}</DrawerTitle>
+                    <DrawerDescription>{controlSummary}</DrawerDescription>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setMobileSheet("none")}>{language === "es" ? "Cerrar" : "Close"}</Button>
+                </div>
+              </DrawerHeader>
+              <ScrollArea className="mobile-sheet-content mobile-sheet-scroller">
+                <div className="mobile-sheet-body map-toolbar-body-sheet">
+                  {controlsBodyNode}
+                </div>
+              </ScrollArea>
+            </DrawerContent>
+          </Drawer>
+
           <Drawer open={inspectorOpen} onOpenChange={setInspectorOpen} direction="bottom" modal={false}>
             <DrawerContent className="mobile-sheet-container shadcn-mobile-drawer" data-testid="mobile-inspector-sheet" aria-label={`${t.evidence} / ${priorityTitle}`}>
               <DrawerHeader className="mobile-sheet-header">
@@ -1112,7 +1397,7 @@ export default function OperationsConsole() {
                     <DrawerTitle>{t.evidence} / {priorityTitle}</DrawerTitle>
                     <DrawerDescription>{selectedSummary}</DrawerDescription>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setInspectorOpen(false)}>{language === "es" ? "Cerrar" : "Close"}</Button>
+                  <Button type="button" variant="outline" size="sm" data-testid="mobile-inspector-close" onClick={() => setInspectorOpen(false)}>{language === "es" ? "Cerrar" : "Close"}</Button>
                 </div>
               </DrawerHeader>
               <ScrollArea className="mobile-sheet-content mobile-sheet-scroller">
@@ -1122,7 +1407,7 @@ export default function OperationsConsole() {
               </ScrollArea>
             </DrawerContent>
           </Drawer>
-        </div>
+        </>
       )}
     </main>
   );
