@@ -67,9 +67,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 .status-pill { display: inline-flex; background: var(--green); color: white; padding: 5px 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 .field-label { display: block; margin: 16px 0 8px; color: var(--ops-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 .segmented, .download-row, .button-row { display: flex; gap: 6px; flex-wrap: nowrap; }
-.segmented button, .map-toolbar button, .download-row a, .text-action { border: 1px solid var(--line); background: #fffdf8; padding: 8px 10px; min-height: 40px; cursor: pointer; }
-.segmented button.active, .map-toolbar button.active { background: var(--black); color: white; border-color: var(--black); }
-.map-toolbar button:disabled { color: #8b8b84; background: #ebe7de; cursor: not-allowed; border-color: #d1cabd; }
+.segmented button, .map-toolbar button, .map-toolbar-body-sheet button, .download-row a, .text-action { border: 1px solid var(--line); background: #fffdf8; padding: 8px 10px; min-height: 40px; cursor: pointer; }
+.segmented button.active, .map-toolbar button.active, .map-toolbar-body-sheet button.active { background: var(--black); color: white; border-color: var(--black); }
+.map-toolbar button:disabled, .map-toolbar-body-sheet button:disabled { color: #8b8b84; background: #ebe7de; cursor: not-allowed; border-color: #d1cabd; }
 .aoi-list { display: grid; gap: 8px; }
 .aoi-card { display: grid; justify-content: stretch; gap: 4px; height: auto; min-height: 58px; text-align: left; border: 1px solid var(--line); background: #fffdf8; padding: 11px; cursor: pointer; white-space: normal; }
 .aoi-card.active { border-color: var(--black); box-shadow: inset 4px 0 0 var(--black); }
@@ -241,27 +241,43 @@ dd { margin: 0; text-align: right; font-weight: 700; }
   .map-toolbar .map-toolbar-body > .control-group:last-of-type { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
-  .ops-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .left-rail { max-height: 188px; border-right: 0; border-bottom: 1px solid var(--line); padding: 10px; }
-  .brand-block { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; padding-bottom: 8px; margin-bottom: 8px; }
-  .brand-block h1 { font-size: 18px; margin: 0; max-width: none; }
-  .brand-block p { display: none; }
-  .brand-block .quick-start {
-    display: block;
-    grid-column: 1 / -1;
-    margin-top: 0;
-    padding: 5px 7px;
+  .ops-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; --mobile-rail-h: 56px; }
+  /* slim top app bar: title + language + info only */
+  .left-rail {
+    max-height: var(--mobile-rail-h);
+    display: flex;
+    align-items: center;
+    gap: 10px;
     overflow: hidden;
-    font-size: 11px;
-    line-height: 1.15;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 10px;
   }
-  .status-pill { font-size: 10px; padding: 4px 6px; grid-column: 2; grid-row: 1; }
-  .field-label { margin: 8px 0 5px; font-size: 10px; }
-  .left-rail > .field-label:first-of-type { display: inline-block; margin: 6px 0 6px; vertical-align: middle; }
-  .segmented { display: inline-flex; position: static; margin: 0 0 6px 8px; vertical-align: middle; }
-  .segmented button { min-width: 44px; }
+  .brand-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .brand-block h1 { font-size: 16px; margin: 0; max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-block p, .brand-block .quick-start, .status-pill { display: none; }
+  .brand-info {
+    flex: 0 0 auto;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+    font-size: 18px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #fffdf8;
+  }
+  .left-rail .field-label, .left-rail .muted { display: none; }
+  .segmented { display: inline-flex; flex: 0 0 auto; margin: 0; }
+  .segmented button { min-width: 40px; min-height: 40px; }
   .aoi-list {
     display: flex;
     gap: 6px;
@@ -294,7 +310,7 @@ dd { margin: 0; text-align: right; font-weight: 700; }
   .downloads-section h2 { display: none; }
   .download-row { flex-wrap: wrap; gap: 5px; }
   .download-row a, .text-action { min-height: 40px; padding: 8px 9px; }
-  .map-stage { min-height: calc(100dvh - 188px - var(--install-bar, 0px)); }
+  .map-stage { min-height: calc(100dvh - var(--mobile-rail-h) - var(--install-bar, 0px)); }
   .map-toolbar {
     left: 8px;
     top: 8px;
@@ -362,6 +378,9 @@ dd { margin: 0; text-align: right; font-weight: 700; }
   .map-toolbar .map-toolbar-toggle { min-height: 48px; }
   .map-toolbar label { min-width: 0; }
   .desktop-right-rail { display: none; }
+  /* hide the floating map controls while the evidence sheet is open so the
+     two top bars don't compete */
+  .map-toolbar.inspecting { display: none; }
   .mobile-sheet-shell {
     position: fixed;
     inset: auto 0 0 0;
@@ -441,9 +460,80 @@ dd { margin: 0; text-align: right; font-weight: 700; }
     margin-top: 8px;
     padding: 9px;
   }
-  .mobile-sheet-body section:not(.operational-brief):not(.evidence-panel):not(.priority-panel) {
+  /* scope the "hide secondary panels" rule to the evidence inspector body so the
+     About / Zona / Capas sheets keep their own content */
+  .mobile-sheet-body .inspector-body section:not(.operational-brief):not(.evidence-panel):not(.priority-panel) {
     display: none;
   }
+  .mobile-sheet-body .downloads-section h2 { display: block; font-size: 13px; margin: 0 0 6px; }
+
+  /* ---- bottom thumb dock (the mobile "menu") ---- */
+  .mobile-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1200;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px 8px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(231, 226, 216, 0.96) 60%, rgba(231, 226, 216, 0));
+    pointer-events: none;
+  }
+  .mobile-dock-btn {
+    pointer-events: auto;
+    min-height: 54px;
+    height: auto;
+    display: grid;
+    gap: 2px;
+    align-content: center;
+    justify-items: stretch;
+    text-align: left;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: #fffdf8;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+    white-space: normal;
+  }
+  .mobile-dock-btn span {
+    color: var(--ops-muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .mobile-dock-btn b {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-dock-btn-wide { grid-column: 1 / -1; }
+
+  /* zona sheet: stack affected-area cards vertically with full info */
+  .mobile-zona-list .aoi-list { display: grid; gap: 8px; overflow: visible; }
+  .mobile-zona-list .aoi-card {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    min-height: auto;
+    max-height: none;
+  }
+  .mobile-zona-list .aoi-card span { white-space: normal; }
+  .mobile-zona-list .aoi-card small { -webkit-line-clamp: 3; }
+
+  /* capas sheet: controls laid out comfortably (not the 2-col accordion grid) */
+  .map-toolbar-body-sheet { display: grid; gap: 14px; }
+  .map-toolbar-body-sheet .control-group { grid-column: auto; gap: 6px; }
+  .map-toolbar-body-sheet .button-row { overflow-x: visible; flex-wrap: wrap; }
+  .map-toolbar-body-sheet .button-row button { flex: 1 1 auto; min-height: 44px; }
+  .map-toolbar-body-sheet .range-row button { flex: 0 0 auto; }
 }
 .install-prompt {
   position: fixed;
