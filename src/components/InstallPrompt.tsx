@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { LANG_EVENT, readStoredLang } from "@/lib/lang";
 
 // The `beforeinstallprompt` event is not in the standard DOM lib types.
 interface BeforeInstallPromptEvent extends Event {
@@ -11,6 +12,8 @@ interface BeforeInstallPromptEvent extends Event {
 const DISMISS_KEY = "rv-install-dismissed-at";
 // Re-offer the banner this long after the user dismisses it.
 const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+// CSS var the app shell reads to reserve space so the bar never covers content.
+const OFFSET_VAR = "--install-bar";
 
 type Lang = "es" | "en";
 // "native": Chromium fired beforeinstallprompt → real install button.
@@ -58,6 +61,7 @@ export default function InstallPrompt() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [visible, setVisible] = useState(false);
   const [lang, setLang] = useState<Lang>("es");
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -66,7 +70,8 @@ export default function InstallPrompt() {
     const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) ?? 0);
     if (dismissedAt && Date.now() - dismissedAt < SNOOZE_MS) return;
 
-    setLang(navigator.language.toLowerCase().startsWith("en") ? "en" : "es");
+    // Follow the app's ES/EN choice, not the browser locale.
+    setLang(readStoredLang());
 
     // Show right away with the best guess for this browser; if Chromium later
     // fires beforeinstallprompt we upgrade to the real install button.
@@ -83,14 +88,40 @@ export default function InstallPrompt() {
       setVisible(false);
       setDeferred(null);
     };
+    const onLangChange = (e: Event) => {
+      const next = (e as CustomEvent).detail;
+      if (next === "es" || next === "en") setLang(next);
+    };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener(LANG_EVENT, onLangChange);
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener(LANG_EVENT, onLangChange);
     };
   }, []);
+
+  // Reserve the bar's height on the document so the app shell shifts down
+  // instead of being covered. Kept in sync on resize and content changes.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!visible || !barRef.current) {
+      root.style.setProperty(OFFSET_VAR, "0px");
+      return;
+    }
+    const apply = () => {
+      const h = barRef.current?.offsetHeight ?? 0;
+      root.style.setProperty(OFFSET_VAR, `${h}px`);
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      root.style.setProperty(OFFSET_VAR, "0px");
+    };
+  }, [visible, mode, lang]);
 
   if (!visible || !mode) return null;
 
@@ -113,7 +144,7 @@ export default function InstallPrompt() {
   const hint = mode === "ios" ? t.iosHint : mode === "manual" ? t.manualHint : null;
 
   return (
-    <div className="install-prompt" role="dialog" aria-label={t.aria}>
+    <div ref={barRef} className="install-prompt" role="dialog" aria-label={t.aria}>
       <div className="install-prompt-icon" aria-hidden="true">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
           <rect x="6" y="2.5" width="12" height="19" rx="2.4" stroke="currentColor" strokeWidth="1.6" />

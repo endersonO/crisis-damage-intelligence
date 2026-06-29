@@ -9,6 +9,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { trackAnalytics } from "@/lib/analytics";
+import { persistLang, readStoredLang } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 import MapPanel from "./map/MapPanel";
 import type { AoiCatalog, AoiRecord, DamageFeature, Language, VlmRecord } from "./types";
@@ -511,7 +512,7 @@ export default function OperationsConsole() {
   const [catalogStatus, setCatalogStatus] = useState<LoadStatus>("loading");
   const [aoiLayerState, setAoiLayerState] = useState<Record<string, AoiLayerState>>({});
   const [activeId, setActiveId] = useState("emsr884-aoi12-caraballeda");
-  const [language, setLanguage] = useState<Language>("es");
+  const [language, setLanguage] = useState<Language>(readStoredLang);
   const [filter, setFilter] = useState<Filter>("all");
   const [mode, setMode] = useState<Mode>("after");
   const [basemap, setBasemap] = useState<Basemap>("aerial");
@@ -564,6 +565,10 @@ export default function OperationsConsole() {
       motionQuery.removeEventListener("change", syncMotion);
     };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     fetch("/data/catalog.json")
@@ -729,6 +734,7 @@ export default function OperationsConsole() {
       });
     }
     setLanguage(nextLanguage);
+    persistLang(nextLanguage);
   };
   const selectAoi = (id: string, cityId?: string) => {
     trackFirstInteraction("aoi");
