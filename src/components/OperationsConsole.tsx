@@ -770,7 +770,7 @@ export default function OperationsConsole() {
     let cancelled = false;
     const run = async () => {
       const budgetBytes = await getOfflineBudgetBytes();
-      const completed = await precacheAoi(active, activeFeatures, vlm, {
+      const result = await precacheAoi(active, activeFeatures, vlm, {
         signal: controller.signal,
         budgetBytes,
         onProgress: (progress) => {
@@ -785,8 +785,11 @@ export default function OperationsConsole() {
         },
       });
       if (!cancelled && !controller.signal.aborted) {
-        if (completed) precachedAoisRef.current.add(active.id);
-        setOfflineStatus((status) => ({ ...status, ready: completed }));
+        // Only mark the AOI as cached when tiles actually landed in the offline
+        // cache; otherwise retry on the next open instead of reporting a false
+        // "offline ready" (the production CORS regression stored nothing).
+        if (result.ready) precachedAoisRef.current.add(active.id);
+        setOfflineStatus((status) => ({ ...status, ready: result.ready }));
       }
     };
     scheduleIdle(() => {
