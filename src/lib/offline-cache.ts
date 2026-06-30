@@ -112,7 +112,20 @@ export function computeImportantUrls(
   return [...urls];
 }
 
-export type PrecacheProgress = { done: number; total: number };
+export type PrecacheProgress = { done: number; total: number; stored: number; failed: number };
+
+export type PrecacheResult = {
+  /** Finished iterating without hitting the storage budget. */
+  completed: boolean;
+  /** Tiles cached now or already present in the offline cache. */
+  stored: number;
+  /** Tiles that failed to fetch/store (CORS-blocked, network error, or non-200). */
+  failed: number;
+  /** Tiles attempted in total. */
+  total: number;
+  /** Offline coverage is genuinely usable: we stored more than we failed. */
+  ready: boolean;
+};
 
 export async function getOfflineBudgetBytes(): Promise<number> {
   try {
@@ -143,15 +156,19 @@ type PrecacheOpts = {
 export async function precacheUrls(
   urls: string[],
   opts: PrecacheOpts = {},
-): Promise<boolean> {
-  if (typeof caches === "undefined" || urls.length === 0) return true;
-  const cache = await caches.open(OFFLINE_CACHE);
+): Promise<PrecacheResult> {
   const total = urls.length;
+  if (typeof caches === "undefined" || urls.length === 0) {
+    return { completed: true, stored: 0, failed: 0, total, ready: total === 0 };
+  }
+  const cache = await caches.open(OFFLINE_CACHE);
   let done = 0;
+  let stored = 0;
+  let failed = 0;
   let cursor = 0;
   let budgetHit = false;
 
-  const report = () => opts.onProgress?.({ done, total });
+  const report = () => opts.onProgress?.({ done, total, stored, failed });
   report();
 
   const worker = async () => {
@@ -167,12 +184,25 @@ export async function precacheUrls(
       cursor += 1;
       try {
         const existing = await cache.match(url);
-        if (!existing) {
-          const res = await fetch(url, { signal: opts.signal });
-          if (res.ok) await cache.put(url, res.clone());
+        if (existing) {
+          stored += 1;
+        } else {
+          // Explicit CORS: cross-origin tiles (e.g. R2 in production) only land
+          // in the cache when the asset host returns Access-Control-Allow-Origin.
+          // A blocked/opaque response throws or is !ok, so it is counted as a
+          // miss instead of being silently reported as cached.
+          const res = await fetch(url, { mode: "cors", signal: opts.signal });
+          if (res.ok) {
+            await cache.put(url, res.clone());
+            stored += 1;
+          } else {
+            failed += 1;
+          }
         }
       } catch {
-        // best effort for field devices with intermittent links
+        // CORS-blocked, offline, or intermittent link: count as a miss so the
+        // caller never reports offline coverage that was never stored.
+        if (!opts.signal?.aborted) failed += 1;
       }
       done += 1;
       if (done % 8 === 0 || done === total) report();
@@ -180,7 +210,14 @@ export async function precacheUrls(
   };
 
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, urls.length) }, worker));
-  return !budgetHit;
+  report();
+  return {
+    completed: !budgetHit,
+    stored,
+    failed,
+    total,
+    ready: stored > 0 && stored > failed,
+  };
 }
 
 export async function precacheAoi(
@@ -188,7 +225,7 @@ export async function precacheAoi(
   features: DamageFeature[],
   vlmMap: VlmMap,
   opts: PrecacheOpts = {},
-): Promise<boolean> {
+): Promise<PrecacheResult> {
   const urls = computeImportantUrls(aoi, features, vlmMap);
   return precacheUrls(urls, opts);
 }
