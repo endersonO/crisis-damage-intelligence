@@ -40,12 +40,13 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
   const path = url.pathname;
-  if (/\.(tif|tiff|cog)$/i.test(path)) return;
 
+  // Imagery tiles/chips are same-origin locally but live on a remote asset host
+  // (R2 in production). Match by pathname regardless of origin and serve
+  // cache-first so the offline precache works in production, not just locally.
   if (path.startsWith("/data/tiles/") || path.startsWith("/data/chips/")) {
+    if (/\.(tif|tiff|cog)$/i.test(path)) return;
     event.respondWith(
       caches
         .open(OFFLINE)
@@ -54,6 +55,11 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
+
+  // Everything else is only handled for same-origin requests.
+  if (url.origin !== self.location.origin) return;
+
+  if (/\.(tif|tiff|cog)$/i.test(path)) return;
 
   if (path.startsWith("/data/")) {
     event.respondWith(networkFirstWithTimeout(request, CACHE, 3500));
